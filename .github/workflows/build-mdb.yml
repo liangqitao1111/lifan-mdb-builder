@@ -30,13 +30,12 @@ jobs:
       - name: 安装 Access Database Engine（ACE x64）
         shell: powershell
         run: |
-          # winget 强制 x64（默认可能装 x86，64 位 pyodbc 看不到）
-          winget install Microsoft.AccessDatabaseEngine2016 --architecture x64 --accept-package-agreements --accept-source-agreements --silent
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host 'x64 install failed, retry default arch...'
-            winget install Microsoft.AccessDatabaseEngine2016 --accept-package-agreements --accept-source-agreements --silent
-          }
+          # 下载官方 2016 x64 安装器（直链已验证 200 OK；winget 包默认装 x86，64 位 pyodbc 不可见）
+          curl.exe -L -o ace_x64.exe "https://download.microsoft.com/download/3/5/c/35c84c36-661a-44e6-9324-8786b8dbe231/accessdatabaseengine_X64.exe"
+          # 静默安装（/quiet 无提示，/passive 显示进度可选）
+          Start-Process .\ace_x64.exe -ArgumentList '/quiet' -Wait
           Start-Sleep -Seconds 10
+          Remove-Item .\ace_x64.exe -ErrorAction SilentlyContinue
 
       - name: 安装依赖
         shell: bash
