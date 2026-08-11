@@ -1,0 +1,97 @@
+{
+  "version": "1.0",
+  "tool": "理反 Web",
+  "tables": {
+    "ZK": {
+      "comment": "钻孔信息表",
+      "columns": {
+        "钻孔编号": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(50)"
+        },
+        "层号": {
+          "type": "INTEGER",
+          "mdb_type": "LONG"
+        },
+        "层底深度": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        },
+        "层厚": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        },
+        "岩土定名": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(100)"
+        },
+        "状态": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(20)"
+        }
+      }
+    },
+    "DZ": {
+      "comment": "地层数据表",
+      "columns": {
+        "钻孔编号": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(50)"
+        },
+        "层号": {
+          "type": "INTEGER",
+          "mdb_type": "LONG"
+        },
+        "岩土定名": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(100)"
+        },
+        "描述": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(255)"
+        },
+        "密实度": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(20)"
+        },
+        "湿度": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(20)"
+        },
+        "N63.5": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        },
+        "承载力": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        }
+      }
+    },
+    "DT": {
+      "comment": "动探记录表",
+      "columns": {
+        "钻孔编号": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(50)"
+        },
+        "深度": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        },
+        "击数": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        },
+        "类型": {
+          "type": "TEXT",
+          "mdb_type": "TEXT(20)"
+        },
+        "杆长": {
+          "type": "REAL",
+          "mdb_type": "DOUBLE"
+        }
+      }
+    }
+  }
+}

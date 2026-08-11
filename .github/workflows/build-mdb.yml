@@ -1,0 +1,73 @@
+name: 生成理反 MDB
+
+on:
+  repository_dispatch:
+    types: [build-mdb]        # 网页后端触发（repository_dispatch）
+  workflow_dispatch:          # 手动触发测试（GitHub 网页 → Actions → Run workflow）
+    inputs:
+      sqlite_path:            # SQLite 工作库路径（留空则用 sample/work.db 测试）
+        description: "SQLite 路径（如 payload/work.db；留空用 sample/work.db）"
+        required: false
+        default: "sample/work.db"
+      schema_path:
+        description: "表结构 schema.json 路径"
+        required: false
+        default: "sample/schema.json"
+
+jobs:
+  build-mdb:
+    runs-on: windows-latest   # ★ 免费 Windows 虚拟机（2 核 / 7GB / 14GB）
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── 关键步骤：安装 Access Database Engine（ACE OLEDB）→ 100% 读写 .mdb ──
+      - name: 安装 Access Database Engine（ACE x64）
+        shell: powershell
+        run: |
+          curl -L -o ace.exe "https://download.microsoft.com/download/3/5/C/35C84C36-522A-4F8F-9F5B-0F37F5B1B4E1/AccessDatabaseEngine_x64.exe"
+          Start-Process .\ace.exe -ArgumentList '/quiet' -Wait
+          Start-Sleep -Seconds 15
+
+      - name: 验证 ACE 驱动已安装
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import pyodbc
+          drivers = [d for d in pyodbc.drivers() if 'Access' in d or 'ACE' in d]
+          print('检测到 Access 驱动:', drivers)
+          assert drivers, '❌ Access 驱动未安装'
+          print('✓ ACE OLEDB 就绪')
+          EOF
+
+      - name: 安装依赖
+        shell: bash
+        run: |
+          pip install pypyodbc==1.3.6 pyodbc==5.3.0
+
+      - name: 运行 SQLite → MDB 转换
+        shell: bash
+        run: |
+          SQLITE="${{ inputs.sqlite_path || 'sample/work.db' }}"
+          SCHEMA="${{ inputs.schema_path || 'sample/schema.json' }}"
+          echo "输入: $SQLITE + $SCHEMA"
+          ls -la sample/
+          mkdir -p output
+          python backend/sqlite_to_mdb.py --sqlite "$SQLITE" --schema "$SCHEMA" --out output/lizheng_review.lz
+
+      - name: 回读校验（行数一致才算成功）
+        shell: bash
+        run: |
+          python backend/verify_mdb.py --mdb output/lizheng_review.lz --sqlite sample/work.db
+
+      - name: 上传 MDB 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: lizheng_review_mdb
+          path: output/*.lz
+          retention-days: 30
