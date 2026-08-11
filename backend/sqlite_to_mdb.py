@@ -37,13 +37,19 @@ def connect_mdb(path: str) -> pyodbc.Connection:
 
 
 def create_database(mdb_path: str) -> None:
-    """用 ACE 驱动创建一个空 .mdb（等价于新建 Access 数据库）"""
-    # pyodbc 通过连接字符串创建：指定 DBQ 到不存在的文件，ACE 会自动建库
-    if pyodbc is None:
-        sys.exit("缺少 pyodbc")
-    conn = pyodbc.connect(rf"DRIVER={ACE_DRIVER};DBQ={mdb_path};CREATE_DB=TRUE;")
-    conn.commit()
-    conn.close()
+    """用 ADOX.Catalog 创建空 .mdb（ACE 驱动不支持连接串 CREATE_DB 属性）"""
+    import os
+    if os.path.exists(mdb_path):
+        os.remove(mdb_path)
+    try:
+        import win32com.client
+    except ImportError:
+        sys.exit("缺少 pywin32，请先 pip install pywin32")
+    cat = win32com.client.Dispatch("ADOX.Catalog")
+    try:
+        cat.Create(f"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={mdb_path}")
+    finally:
+        cat = None
 
 
 def map_type(sqlite_type: str, sample_value) -> str:
