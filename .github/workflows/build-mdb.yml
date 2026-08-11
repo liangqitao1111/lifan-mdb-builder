@@ -30,9 +30,16 @@ jobs:
       - name: 安装 Access Database Engine（ACE x64）
         shell: powershell
         run: |
-          # winget 安装（runner 自带 winget，比直链稳定）
-          winget install Microsoft.AccessDatabaseEngine2016 --accept-package-agreements --accept-source-agreements --silent
+          # winget 强制 x64（默认可能装 x86，64 位 pyodbc 看不到）
+          winget install Microsoft.AccessDatabaseEngine2016 --architecture x64 --accept-package-agreements --accept-source-agreements --silent
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "x64 安装失败，尝试默认架构…"
+            winget install Microsoft.AccessDatabaseEngine2016 --accept-package-agreements --accept-source-agreements --silent
+          }
           Start-Sleep -Seconds 10
+          # 诊断：64 位视角 ODBC 驱动注册表
+          Write-Host "=== 64-bit ODBC 驱动 ==="
+          Get-ItemProperty "HKLM:\SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" -ErrorAction SilentlyContinue | Format-List
 
       - name: 安装依赖
         shell: bash
