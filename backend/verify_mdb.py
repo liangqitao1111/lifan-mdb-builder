@@ -36,8 +36,8 @@ def count_sqlite(db: str) -> dict:
     conn = sqlite3.connect(db)
     out = {}
     for name in list_sqlite_tables(db):
-        (n,) = conn.execute(f'SELECT COUNT(*) FROM "{name}"')
-        out[name] = n
+        row = conn.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()
+        out[name] = row[0]
     conn.close()
     return out
 
