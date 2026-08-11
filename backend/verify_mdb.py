@@ -8,6 +8,10 @@ import argparse
 import sqlite3
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 try:
     import pyodbc
 except ImportError:

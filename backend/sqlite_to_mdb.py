@@ -14,6 +14,11 @@ import json
 import sqlite3
 import sys
 
+# Windows 控制台默认 cp1252，强制 UTF-8 输出（GitHub Actions 环境下必需）
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 try:
     import pyodbc
 except ImportError:
