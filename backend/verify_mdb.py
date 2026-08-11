@@ -20,27 +20,42 @@ except ImportError:
 ACE_DRIVER = "{Microsoft Access Driver (*.mdb, *.accdb)}"
 
 
+def list_sqlite_tables(db: str) -> list:
+    conn = sqlite3.connect(db)
+    tables = [
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+    ]
+    conn.close()
+    return tables
+
+
 def count_sqlite(db: str) -> dict:
     conn = sqlite3.connect(db)
     out = {}
-    for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+    for name in list_sqlite_tables(db):
         (n,) = conn.execute(f'SELECT COUNT(*) FROM "{name}"')
         out[name] = n
     conn.close()
     return out
 
 
-def count_mdb(db: str) -> dict:
+def count_mdb(db: str, tables: list) -> dict:
+    """直接对每个表 SELECT COUNT(*)（不依赖 tables() 枚举，ACE 类型归类可能不一致）"""
     if pyodbc is None:
         sys.exit("缺少 pyodbc")
     conn = pyodbc.connect(rf"DRIVER={ACE_DRIVER};DBQ={db};")
     cur = conn.cursor()
     out = {}
-    for row in cur.tables(tableType="TABLE"):
-        name = row.table_name
-        cur.execute(f"SELECT COUNT(*) FROM [{name}]")
-        (n,) = cur.fetchone()
-        out[name] = n
+    for t in tables:
+        try:
+            cur.execute(f"SELECT COUNT(*) FROM [{t}]")
+            (n,) = cur.fetchone()
+            out[t] = n
+        except Exception:
+            out[t] = None  # 缺表
     conn.close()
     return out
 
@@ -52,20 +67,20 @@ def main():
     args = ap.parse_args()
 
     src = count_sqlite(args.sqlite)
-    dst = count_mdb(args.mdb)
+    dst = count_mdb(args.mdb, list(src.keys()))
 
     bad = []
     for t, n in src.items():
-        if dst.get(t) != n:
-            bad.append(f"{t}: sqlite={n} vs mdb={dst.get(t, '缺表')}")
-    for t, n in dst.items():
-        if t not in src:
-            bad.append(f"{t}: mdb 多出表（未预期）n={n}")
+        got = dst.get(t)
+        if got is None:
+            bad.append(f"{t}: sqlite={n} 行 vs mdb=缺表")
+        elif got != n:
+            bad.append(f"{t}: sqlite={n} vs mdb={got} 行不一致")
 
     if bad:
         print("✗ 校验失败：\n" + "\n".join(bad))
         sys.exit(1)
-    print(f"✓ 校验通过：{len(src)} 张表行数一致（{sum(src.values())} 行）")
+    print(f"✓ 校验通过：{len(src)} 张表行数一致（共 {sum(src.values())} 行）")
 
 
 if __name__ == "__main__":
