@@ -58,7 +58,7 @@
           "type": "TEXT",
           "mdb_type": "TEXT(20)"
         },
-        "N63.5": {
+        "N63_5": {
           "type": "REAL",
           "mdb_type": "DOUBLE"
         },
