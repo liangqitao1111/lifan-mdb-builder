@@ -43,6 +43,7 @@ except Exception:
     pass
 
 import db as wdb
+import review_api
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "..", "work", "uploads")   # 上传原件（.mdb/.lz/.accdb）
@@ -58,6 +59,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
+
+# 复核/修正/统计 API（复用桌面版规则引擎）
+app.include_router(review_api.router)
 
 BUILD_OWNER_DEFAULT = "liangqitao1111"
 BUILD_REPO_DEFAULT = "lifan-mdb-builder"
@@ -250,6 +254,16 @@ def _mdb_backend_name():
         return MdbReader().backend
     except Exception as e:
         return f"unavailable: {e}"
+
+# ---------- 前端静态托管（同源部署：FastAPI 即前端即后端）----------
+try:
+    from fastapi.staticfiles import StaticFiles
+    _web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    if os.path.exists(os.path.join(_web_dir, "index.html")):
+        app.mount("/", StaticFiles(directory=_web_dir, html=True), name="web")
+except Exception as e:
+    print(f"[main] 静态托管未启用: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn

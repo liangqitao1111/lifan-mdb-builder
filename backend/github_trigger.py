@@ -158,6 +158,16 @@ def poll(token, owner, repo, run_id, timeout=900):
 
 
 # ---------------------------------------------------------------- artifact
+class _NoAuthRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """S3 artifact 签名直链拒绝 Authorization 头：重定向时剥离（GitHub API 302 → S3）"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        newreq = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if newreq is not None:
+            newreq.headers.pop("Authorization", None)
+        return newreq
+
+
 def fetch_artifact_zip(token, owner, repo, run_id):
     """下载 run 的 artifact（zip 字节）到临时文件，返回 (zip_path, tmpdir, art_name)"""
     arts = api_req(f"{API}/repos/{owner}/{repo}/actions/runs/{run_id}/artifacts", token)
@@ -173,8 +183,9 @@ def fetch_artifact_zip(token, owner, repo, run_id):
     else:
         headers["Authorization"] = f"token {token}"
     req = urllib.request.Request(url, headers=headers)
+    opener = urllib.request.build_opener(_NoAuthRedirectHandler)
     try:
-        with urllib.request.urlopen(req, timeout=180) as r:
+        with opener.open(req, timeout=180) as r:
             data = r.read()
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"下载 artifact 失败 HTTP {e.code}（可改用 gh CLI 手动下载）")

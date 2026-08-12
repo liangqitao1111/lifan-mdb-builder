@@ -573,6 +573,7 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
    路由
    ============================================================ */
 const ROUTES = ['mdb','data','hub','borehole','spt','build'];
+window.CURRENT_HOLE = '';
 function route(name){
   if (!ROUTES.includes(name)) name = 'mdb';
   location.hash = '#' + name;
@@ -999,6 +1000,49 @@ function render(name){
   if (name === 'build') return renderBuild();
 }
 async function renderReview(){
+  const el = document.getElementById('content');
+  if (API_STATE.online && API_STATE.dbId) {
+    el.innerHTML = '<h1 class="page-title">复核工作台</h1><p class="page-sub">正在运行复核规则…</p><div style="padding:48px;text-align:center;color:var(--slate);font-size:14px;">规则引擎全库复核中…</div>';
+    let data;
+    try { data = await apiPost('/db/' + API_STATE.dbId + '/review', {}); }
+    catch (e) {
+      el.innerHTML = '<h1 class="page-title">复核工作台</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">复核失败：' + escHtml((e && e.message) || e) + '<br><a href="javascript:;" onclick="route(\'hub\')" style="color:var(--primary);">重试</a></div>';
+      return;
+    }
+    const s = data.summary || {};
+    const risky = Object.keys(data.by_hole || {}).filter(zk => data.by_hole[zk].h || data.by_hole[zk].m);
+    const rows = risky.sort().map(zk => {
+      const b = data.by_hole[zk];
+      const tags = (b.h ? '<span style="background:var(--error);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;">H·' + b.h + '</span> ' : '') +
+                   (b.m ? '<span style="background:var(--warning);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;">M·' + b.m + '</span>' : '');
+      return '<div style="padding:9px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="window.CURRENT_HOLE=\'' + escAttr(zk) + '\';route(\'borehole\')"><b style="font-size:13px;">' + escHtml(zk) + '</b><span>' + tags + '</span></div>';
+    }).join('');
+    el.innerHTML = `
+      <h1 class="page-title">复核工作台</h1>
+      <p class="page-sub">规则引擎全库复核 · 与桌面版 V3.0.4 同源算法（22+ 条规则）</p>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-head"><span class="label">总孔数</span></div><div class="val">${s.holes || 0}</div><div class="sub">已全量复核</div></div>
+        <div class="stat-card"><div class="stat-head"><span class="label">风险钻孔</span></div><div class="val" style="color:var(--warning);">${risky.length}</div><div class="sub">需人工确认</div></div>
+        <div class="stat-card"><div class="stat-head"><span class="label">高风险 (H)</span></div><div class="val" style="color:var(--error);">${s.h || 0}</div><div class="sub">问题数</div></div>
+        <div class="stat-card"><div class="stat-head"><span class="label">问题总数</span></div><div class="val">${s.total || 0}</div><div class="sub">M:${s.m || 0} 条</div></div>
+      </div>
+      <div class="users-list" style="margin-top:8px;">
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">问题钻孔（${risky.length}）</h3>
+        ${rows || '<div style="color:var(--success);padding:12px;">✓ 全部钻孔复核通过，无问题</div>'}
+      </div>
+      <div class="users-list" style="margin-top:8px;">
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">核心功能</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+          <div class="stat-card" style="background:var(--tint-lavender);cursor:pointer;" onclick="route('borehole')"><div class="val" style="font-size:16px;">钻孔复核</div><div class="sub">22+ 条规则引擎</div></div>
+          <div class="stat-card" style="background:var(--tint-sky);cursor:pointer;" onclick="route('spt')"><div class="val" style="font-size:16px;">批量修正标贯</div><div class="sub">SPT 杆长/击数</div></div>
+          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="showToast('统计成果 - 即将开放','err')"><div class="val" style="font-size:16px;">统计成果</div><div class="sub">承载力 · 岩溶 · 土工</div></div>
+          <div class="stat-card" style="background:var(--tint-peach);cursor:pointer;" onclick="route('build')"><div class="val" style="font-size:16px;">生成 MDB</div><div class="sub">GitHub Actions 回写</div></div>
+        </div>
+      </div>`;
+    return;
+  }
+
+
   document.getElementById('content').innerHTML = `
     <h1 class="page-title">复核工作台</h1>
     <p class="page-sub">理正地层复核全流程 · 规则判定 · 批量修正 · 统计成果 · 成果导出</p>
@@ -1028,6 +1072,50 @@ async function renderReview(){
   `;
 }
 async function renderBorehole(){
+  const el = document.getElementById('content');
+  if (API_STATE.online && API_STATE.dbId && window.CURRENT_HOLE) {
+    const zk = window.CURRENT_HOLE;
+    el.innerHTML = '<h1 class="page-title">钻孔复核 · ' + escHtml(zk) + '</h1><div style="padding:48px;text-align:center;color:var(--slate);">加载复核结果…</div>';
+    try {
+      const r = await apiGet('/db/' + API_STATE.dbId + '/review/' + encodeURIComponent(zk));
+      let strata = { columns: [], rows: [] };
+      try {
+        strata = await apiGet('/db/' + API_STATE.dbId + '/table/z_g_TuCeng?keyword=' + encodeURIComponent(zk) + '&search_col=ZKBH&page_size=50');
+      } catch (e2) {}
+      const issues = r.issues || [];
+      const isH = i => i.level === 'H';
+      const cols = strata.columns || [];
+      const pick = ['TCXH','TCYMC','TCMC','TCCDSD','TCHD','TCMSD','TCSID','TCKSX','TCYS'];
+      const shown = cols.filter(c => pick.includes(String(c).toUpperCase()));
+      const head = shown.map(c => '<div>' + escHtml(c) + '</div>').join('');
+      const bodyRows = (strata.rows || []).map(row => '<div class="t-row" style="grid-template-columns:repeat(' + shown.length + ',1fr);">' + shown.map(c => {
+        let v = row[c]; if (v === null || v === undefined) v = '';
+        return '<div>' + escHtml(String(v)) + '</div>';
+      }).join('') + '</div>').join('');
+      el.innerHTML = `
+        <h1 class="page-title">钻孔复核 · ${escHtml(zk)}</h1>
+        <p class="page-sub">规则引擎 · ${issues.length} 项问题已识别 · 与桌面版同源算法</p>
+        <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:12px;">
+          <div class="table-card">
+            <div class="t-head" style="grid-template-columns:repeat(${shown.length},1fr);height:36px;">${head}</div>
+            ${bodyRows || '<div style="padding:16px;color:var(--slate);">该孔无地层数据</div>'}
+          </div>
+          <div class="matrix" style="margin:0;">
+            <h3>复核问题 · ${issues.length} 项</h3>
+            ${issues.map(i => '<div class="m-row' + (isH(i) ? ' alt' : '') + '"><div><b style="color:' + (isH(i) ? 'var(--error)' : 'var(--warning)') + ';">' + escHtml(i.rule_id) + '</b> · ' + escHtml(i.message) + '</div><div class="muted small">' + escHtml(i.field || '') + '</div></div>').join('') || '<div style="color:var(--success);padding:12px;">✓ 本孔复核通过</div>'}
+            <div style="margin-top:14px;display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="route('hub')">返回工作台</button>
+              <button class="btn btn-secondary" onclick="window.CURRENT_HOLE='';route('borehole')">全部钻孔</button>
+            </div>
+          </div>
+        </div>`;
+    } catch (e) {
+      el.innerHTML = '<h1 class="page-title">钻孔复核 · ' + escHtml(zk) + '</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">加载失败：' + escHtml((e && e.message) || e) + '</div>';
+    }
+    return;
+  }
+
+
   document.getElementById('content').innerHTML = `
     <h1 class="page-title">钻孔复核 · ZK01-01</h1>
     <p class="page-sub">规则引擎 · 4 项问题已识别 · GB 50021-2001 · DBJ 15-31-2016 · TB 10012-2001</p>
@@ -1068,6 +1156,37 @@ async function renderBorehole(){
   `;
 }
 async function renderSpt(){
+  const el = document.getElementById('content');
+  if (API_STATE.online && API_STATE.dbId) {
+    el.innerHTML = '<h1 class="page-title">批量修正标贯</h1><div style="padding:48px;text-align:center;color:var(--slate);">扫描修正建议…</div>';
+    let data;
+    try { data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {}); }
+    catch (e) {
+      el.innerHTML = '<h1 class="page-title">批量修正标贯</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">扫描失败：' + escHtml((e && e.message) || e) + '</div>';
+      return;
+    }
+    const sg = data.suggestions || [];
+    const rows = sg.map(s => '<div class="t-row" style="grid-template-columns:100px 60px 90px 1fr;">' +
+      '<div>' + escHtml(s.zkbh || s.hole || '') + '</div>' +
+      '<div>' + escHtml(s.layer_no || '') + '</div>' +
+      '<div>' + escHtml(s.old_value || s.original || '') + ' → <b style="color:var(--primary);">' + escHtml(s.new_value || s.suggested || '') + '</b></div>' +
+      '<div class="muted small">' + escHtml((s.reason || s.message || '') + ' · ' + (s.rule_id || '')) + '</div>' +
+      '</div>').join('');
+    el.innerHTML = `
+      <h1 class="page-title">批量修正标贯</h1>
+      <p class="page-sub">${sg.length} 条修正建议 · SPT 杆长/击数/可塑性 · 与桌面版 V3.0.4 同源算法</p>
+      <div class="table-card">
+        <div class="t-head" style="grid-template-columns:100px 60px 90px 1fr;height:36px;"><div>钻孔</div><div>层</div><div>建议值</div><div>原因 · 依据</div></div>
+        ${rows || '<div style="padding:16px;color:var(--success);">✓ 无修正建议</div>'}
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-secondary" onclick="route('hub')">返回工作台</button>
+        <button class="btn btn-secondary" onclick="showToast('应用建议：请到数据管理中编辑对应行（建议值已展示）','info')">查看应用说明</button>
+      </div>`;
+    return;
+  }
+
+
   document.getElementById('content').innerHTML = `
     <h1 class="page-title">批量修正标贯</h1>
     <p class="page-sub">123 条修正建议可应用 · 含 39 孔 · SPT 杆长/击数/可塑性 · V3.0.4 口径</p>
