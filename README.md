@@ -431,3 +431,73 @@ GitHub Actions · windows-latest（免费临时 Windows 虚拟机）
 - **理正 .lz 数据库导入**：解析 .lz → 写入业务表（前端用 Web Worker）
 - **PDF 报告导出**：基于 `jspdf` 套模板
 - **离线 PWA**：加 Service Worker，可完全断网使用
+
+---
+
+## 8. FastAPI 后端骨架（P2 · 2026-08-12 实现）
+
+> 上传 .mdb → 解析 → SQLite 工作库 → 在线 CRUD → 触发生成 .mdb 的服务器端。
+> 与前端 MVP 原型（5 屏）配套：前端"数据库接入"的模拟解析、生成 MDB 的模拟轮询，接上本后端即变真实。
+
+### 8.1 文件清单（backend/）
+
+| 文件 | 作用 |
+|---|---|
+| `main.py` | FastAPI 应用 · 9 个 API（上传/列表/读表/增删改/触发/下载/健康） |
+| `mdb_reader.py` | .mdb 读取适配层：**自动探测 ACE(pyodbc) / mdbtools 双后端** |
+| `db.py` | SQLite 工作库：导入、schema 导出、分页查询、行级增删改 |
+| `requirements.txt` | 依赖（fastapi / uvicorn / pyodbc / python-multipart） |
+| `github_trigger.py` | P0 触发脚本（被 main.py 复用，触发+轮询+下载） |
+
+### 8.2 启动与自检
+
+```bash
+pip install -r requirements.txt
+# 自检（用 sample/ 示例 .lz，Windows 需装 ACE 驱动 / Linux 需 apt install mdbtools）
+python backend/mdb_reader.py sample/lizheng_review_sample.lz
+python backend/db.py
+# 启动服务
+cd backend && uvicorn main:app --host 0.0.0.0 --port 8000
+# 健康检查
+curl http://localhost:8000/api/health   # -> {"mdb_backend": "ace" 或 "mdbtools"}
+```
+
+### 8.3 API 一览
+
+```
+POST  /api/upload                      上传 .lz/.mdb → 解析入库 → {db_id, tables}
+GET   /api/db/{db_id}/tables           列出表
+GET   /api/db/{db_id}/table/{t}        读表（?page=&page_size=&keyword=）
+POST  /api/db/{db_id}/table/{t}        新增行 {"data": {...}}
+PUT   /api/db/{db_id}/table/{t}/{id}   更新行
+DELETE/api/db/{db_id}/table/{t}/{id}   删除行
+POST  /api/db/{db_id}/build            触发生成 .mdb（GitHub Actions，后台线程）
+GET   /api/db/{db_id}/download         下载 SQLite 工作库
+GET   /api/health                      健康检查（返回 mdb 读取后端类型）
+```
+
+### 8.4 关键设计
+
+- **双后端适配**：Windows 用 pyodbc+ACE（完整读写）；Linux 用 mdbtools（只读，mdb-tables/mdb-export），`MdbReader()` 启动时自动探测，服务器无 ACE 也能跑
+- **表结构自学习**：上传时按 .mdb 实际列名+类型自动建表（不依赖预置 schema.json），无 id 列自动补 `id INTEGER PRIMARY KEY AUTOINCREMENT` 便于行级编辑
+- **build 异步**：生成 .mdb 需 3-5 分钟（Windows 虚拟机），用后台线程触发，不阻塞 API
+- **触发配置**：服务端设 `GH_TOKEN` 环境变量（GitHub PAT，Actions 读/写权限），main.py 自动复用 `github_trigger.py`
+
+### 8.5 部署组合（与 P0/P1 闭环）
+
+```
+浏览器(MVP 5屏 index.html)
+   │ ① 上传 .lz/.mdb
+   ▼
+FastAPI 后端（免费 Linux VPS）
+   │ ② pyodbc/ACE 或 mdbtools 解析 → SQLite 工作库
+   │ ③ 在线复核/修正（CRUD）
+   │ ④ POST /build → GitHub Actions（免费 Windows 虚拟机）
+   ▼
+生成 .mdb → 回读校验 → 下载链接（100% 可靠写回）
+```
+
+### 8.6 已知限制
+
+- Linux 上 mdbtools **只读** .mdb（写回仍走 GitHub Actions Windows 节点，与方案结论一致）
+- 上传文件建议 ≤200 MB；大批量表导入为串行，可后续加分批

@@ -1,0 +1,6 @@
+# 理反 Web 后端依赖（Python 3.8+）
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9   # 文件上传
+pyodbc>=5.0               # Windows 读 .mdb（需安装 Access Database Engine）
+# Linux 读 .mdb 依赖系统包：apt install mdbtools（无需 pip 包）
