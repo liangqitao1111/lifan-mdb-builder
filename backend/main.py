@@ -140,11 +140,11 @@ def list_tables(db_id: str):
 
 @app.get("/api/db/{db_id}/table/{table}")
 def read_table(db_id: str, table: str, page: int = 1, page_size: int = 50,
-               keyword: str = "", search_col: str = ""):
+               keyword: str = "", search_col: str = "", exact: bool = False):
     path = resolve_db(db_id)
     try:
         return wdb.get_rows(path, table, page, min(page_size, 200),
-                            keyword or None, search_col or None)
+                            keyword or None, search_col or None, exact)
     except Exception as e:
         raise HTTPException(404, f"读表失败: {e}")
 

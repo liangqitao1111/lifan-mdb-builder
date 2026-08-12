@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>理反 Web · 理正地层复核数据管理平台</title>
 <style>
-/* ============== 设计 Tokens（Notion 风） ============== */
 :root {
   --primary: #0071e3;
   --primary-pressed: #0066cc;
@@ -42,7 +41,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* ============== 登录页 ============== */
 .login-wrap { display: flex; min-height: 100vh; }
 .login-brand { flex: 0 0 690px; background: var(--navy); padding: 64px; color: var(--on-dark); display: flex; flex-direction: column; gap: 20px; }
 .login-brand .logo { display: flex; align-items: center; gap: 12px; }
@@ -71,7 +69,6 @@ a:hover { text-decoration: underline; }
 .login-form .hint { text-align: center; color: var(--steel); font-size: 12px; margin-top: 6px; }
 .login-form .err { color: var(--error); font-size: 12px; min-height: 16px; }
 
-/* ============== 应用框架 ============== */
 .app { display: none; min-height: 100vh; }
 .app.show { display: flex; }
 .sidebar { flex: 0 0 240px; background: var(--surface); padding: 24px 0; display: flex; flex-direction: column; gap: 4px; }
@@ -101,7 +98,6 @@ a:hover { text-decoration: underline; }
 .content h1.page-title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
 .content .page-sub { color: var(--steel); font-size: 13px; margin-bottom: 20px; }
 
-/* ============== 通用卡片 / 按钮 ============== */
 .card { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 22px; }
 .btn { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .18s; }
 .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,.25); }
@@ -113,7 +109,6 @@ a:hover { text-decoration: underline; }
 .btn-danger { color: var(--error); background: #fff; border: 1px solid var(--hairline-strong); }
 .btn-link { color: var(--primary); font-weight: 500; }
 
-/* ============== 仪表盘 ============== */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
 .stat-card { background: var(--canvas); border: 1px solid var(--hairline); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-card); }
 .stat-card .stat-head { display: flex; justify-content: space-between; align-items: center; }
@@ -126,7 +121,6 @@ a:hover { text-decoration: underline; }
 .welcome { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .welcome .welcome-r { display: flex; gap: 10px; }
 
-/* ============== 表格 ============== */
 .toolbar { background: var(--surface); border-radius: var(--radius-lg); padding: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; height: 56px; }
 .tabs { display: flex; height: 100%; }
 .tab { display: flex; align-items: center; padding: 0 14px; height: 100%; color: var(--slate); font-size: 13px; cursor: pointer; }
@@ -152,7 +146,6 @@ a:hover { text-decoration: underline; }
 .pager .pages button { width: 32px; height: 32px; border-radius: 6px; background: #fff; border: 1px solid var(--hairline-strong); cursor: pointer; color: var(--charcoal); }
 .pager .pages button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 
-/* ============== 导出 / 备份 / 用户 ============== */
 .banner { background: var(--navy); color: var(--on-dark); border-radius: 14px; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .banner h2 { font-size: 28px; font-weight: 700; }
 .banner p { color: var(--on-dark-muted); font-size: 13px; max-width: 620px; margin-top: 8px; }
@@ -195,7 +188,6 @@ a:hover { text-decoration: underline; }
 .matrix .m-row.alt { background: var(--surface-soft); }
 .matrix .check { display: flex; justify-content: center; }
 
-/* ============== 弹窗 ============== */
 .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 100; }
 .modal-mask.show { display: flex; }
 .modal { background: #fff; border-radius: var(--radius-lg); width: 520px; max-width: 90vw; padding: 28px; box-shadow: var(--shadow-card); }
@@ -205,7 +197,6 @@ a:hover { text-decoration: underline; }
 .modal .form-row input, .modal .form-row select { height: 38px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: var(--radius-md); outline: none; }
 .modal .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
-/* ============== 响应式 ============== */
 @media (max-width: 1024px) {
   .login-wrap { flex-direction: column; }
   .login-brand { flex: none; padding: 40px; }
@@ -221,7 +212,6 @@ a:hover { text-decoration: underline; }
   .content { padding: 16px; }
 }
 
-/* ============== 工具 ============== */
 .flex { display: flex; gap: 12px; align-items: center; }
 .spacer { flex: 1; }
 .muted { color: var(--steel); }
@@ -231,7 +221,6 @@ a:hover { text-decoration: underline; }
 .toast.err { background: var(--error); }
 .toast.ok { background: var(--success); }
 
-/* ============== 前后端接线：连接状态条 / 分页 / 构建操作 ============== */
 .connbar { display: flex; align-items: center; gap: 8px; padding: 8px 32px; font-size: 12px; border-bottom: 1px solid var(--hairline); }
 .connbar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 8px; }
 .connbar.ok { background: var(--tint-mint); color: var(--success); }
@@ -245,7 +234,6 @@ a:hover { text-decoration: underline; }
 .build-actions { display: flex; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--hairline-strong); }
 
 
-/* ============== Apple 风格工作台 ============== */
 .ws-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
 .ws-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; color: var(--ink); line-height: 1.1; }
 .ws-sub { color: var(--slate); font-size: 14px; margin-top: 4px; }
@@ -291,7 +279,6 @@ a:hover { text-decoration: underline; }
 </head>
 <body>
 
-<!-- ============== 登录页 ============== -->
 <div id="loginPage" class="login-wrap">
   <div class="login-brand">
     <div class="logo">
@@ -332,7 +319,6 @@ a:hover { text-decoration: underline; }
   </div>
 </div>
 
-<!-- ============== 主应用 ============== -->
 <div id="app" class="app">
   <aside class="sidebar">
     <div class="sb-head">
@@ -365,7 +351,6 @@ a:hover { text-decoration: underline; }
   </div>
 </div>
 
-<!-- ============== 通用弹窗 ============== -->
 <div class="modal-mask" id="modalMask">
   <div class="modal" id="modalBody">
     <h3 id="modalTitle">编辑</h3>
@@ -380,9 +365,6 @@ a:hover { text-decoration: underline; }
 <div class="toast" id="toast"></div>
 
 <script>
-/* ============================================================
-   理反 Web · SPA · 数据访问 (IndexedDB 封装)
-   ============================================================ */
 const DB_NAME = 'lifan_web_db';
 const DB_VERSION = 1;
 const TABLES = ['zk_boreholes','dz_strata','dt_dynamic','sj_lab','rb_daily','users','backups','audit_logs','config'];
@@ -417,10 +399,6 @@ async function sha256(s){
 }
 
 
-/* ============================================================
-   前后端接线 · API 客户端（V2 契约 docs/API_CONTRACT.md §2）
-   相对路径 /api；file:// 或后端不可达时自动回退本地模式（IndexedDB）
-   ============================================================ */
 const API_STATE = {
   online: false,        // 后端 /api 可达
   checked: false,       // 已完成健康探测
@@ -541,9 +519,6 @@ function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').re
 function escAttr(s){ return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 function qsName(form, name){ return form.querySelector('[name="' + String(name).replace(/"/g, '\\"') + '"]'); }
 
-/* ============================================================
-   种子数据：首次启动时填充
-   ============================================================ */
 async function seed(){
   const users = await dbAll('users');
   if (users.length === 0) {
@@ -565,9 +540,6 @@ async function seed(){
   }
 }
 
-/* ============================================================
-   会话 / 权限
-   ============================================================ */
 let session = null;
 const PERMISSIONS = {
   admin:  {data_query:true, data_edit:true, data_delete:true, db_export:true, backup:true, user_manage:true},
@@ -583,9 +555,6 @@ function showToast(msg, type='ok'){
   setTimeout(() => t.className = 'toast', 2200);
 }
 
-/* ============================================================
-   登录 / 登出
-   ============================================================ */
 document.getElementById('loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   const u = document.getElementById('loginUser').value.trim();
@@ -614,9 +583,6 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   document.getElementById('loginPage').style.display = 'flex';
 });
 
-/* ============================================================
-   路由
-   ============================================================ */
 const ROUTES = ['workspace','tools','build','config'];
 window.CURRENT_HOLE = '';
 function route(name){
@@ -631,9 +597,6 @@ function route(name){
 window.addEventListener('hashchange', () => route(location.hash.replace('#','')));
 document.querySelectorAll('.nav-item[data-route]').forEach(el => el.addEventListener('click', () => route(el.dataset.route)));
 
-/* ============================================================
-   视图：Dashboard
-   ============================================================ */
 async function renderDashboard(){
   const total = await dbAll('zk_boreholes');
   const dz = await dbAll('dz_strata');
@@ -668,9 +631,6 @@ async function renderDashboard(){
   `;
 }
 
-/* ============================================================
-   视图：数据管理（CRUD）
-   ============================================================ */
 const TBL_META = {
   zk_boreholes: {label:'ZK 钻孔信息表', cols:[
     {key:'borehole_no', label:'孔号', width:120},
@@ -753,9 +713,6 @@ async function delRow(id){
 }
 document.getElementById('modalCancel').addEventListener('click', () => document.getElementById('modalMask').classList.remove('show'));
 
-/* ============================================================
-   导出
-   ============================================================ */
 let exportFormat = 'sql';
 async function renderExport(){
   document.getElementById('content').innerHTML = `
@@ -843,9 +800,6 @@ function downloadBlob(blob, filename){
 }
 function dateStr(){ return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19); }
 
-/* ============================================================
-   备份恢复
-   ============================================================ */
 async function renderBackup(){
   const backups = (await dbAll('backups')).sort((a,b)=>b.id-a.id);
   document.getElementById('content').innerHTML = `
@@ -929,9 +883,6 @@ async function downloadBackup(id){
 }
 async function delBackup(id){ if (!confirm('确认删除该备份？')) return; await dbDel('backups', id); renderBackup(); }
 
-/* ============================================================
-   用户权限
-   ============================================================ */
 async function renderUsers(){
   const users = await dbAll('users');
   document.getElementById('content').innerHTML = `
@@ -1032,12 +983,6 @@ async function toggleUser(id){
   renderUsers();
 }
 
-/* ============================================================
-   启动
-   ============================================================ */
-/* ============================================================
-   视图：复核工作台 / 钻孔复核 / 批量修正（理反 V3.0.4 核心业务）
-   ============================================================ */
 function render(name){
   if (name === 'workspace') return renderWorkspace();
   if (name === 'tools') return renderTools();
@@ -1202,11 +1147,48 @@ async function renderBorehole(){
   `;
 }
 
-/* ============ 数据工作台（数据管理 + 复核合并） ============ */
 let WS = { review: null, zkbh: '', table: 'z_g_TuCeng' };
 
 
-/* ============ 复核设置（与桌面端一致） ============ */
+const COLUMN_CN = {
+  'ZKBH':'钻孔编号','GCSY':'工程代码','ID':'ID',
+  'TCXH':'层号','TCZCBH':'主层','TCYCBH':'亚层','TCDZSD':'地质时代','TCDZCY':'地质成因',
+  'TCCDSD':'层底深度(m)','TCHD':'层厚(m)','TCYMC':'岩土名称','TCMC':'岩土名称','TCYS':'颜色',
+  'TCMSD':'密实度','TCSID':'湿度','TCKSX':'可塑性','TCFHCD':'风化程度','TCMS':'描述',
+  'BGDSD':'深度(m)','BGGC':'杆长(m)','BGJS':'实测N','BGXZJS':'修正N',
+  'DTDSD':'深度(m)','DTLX':'类型','DTJS':'N63.5','DTXZJS':'修正',
+  'SWCH':'序号','SWSD':'地下水位深度(m)','SWLX':'水位类型','SWXZ':'地下水类型','CY':'是否参与','SWCSRQ':'测水时间',
+  'QYBH':'取样编号','QYSD':'深度(m)','QYHSL':'含水率%','QYYX':'液限%','QYSY':'塑限%','QYDC':'综合定名'
+};
+const WS_COLS = {
+  'z_g_TuCeng':  ['TCXH','TCYMC','TCMC','TCMS','TCMSD','TCSID','TCKSX','TCCDSD','TCHD','TCYS','TCFHCD'],
+  'z_y_BiaoGuan':['BGDSD','BGGC','BGJS','BGXZJS'],
+  'z_y_DongTan': ['DTDSD','DTLX','DTJS','DTXZJS'],
+  'z_g_ShuiWei': ['SWCH','SWSD','SWLX','SWXZ','CY','SWCSRQ'],
+  'z_c_QuYang':  ['QYBH','QYSD','QYHSL','QYYX','QYSY','QYDC']
+};
+const WS_COL_WIDE = ['TCMS','TCMC','TCYMC','QYDC'];
+function fmtNum(v){
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'number') {
+    if (!isFinite(v)) return String(v);
+    if (Number.isInteger(v)) return String(v);
+    return String(Math.round(v * 1000) / 1000);
+  }
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (t === '') return '';
+    const n = Number(t);
+    if (!isNaN(n) && /^[+-]?\d+(\.\d+)?$/.test(t)) {
+      if (Number.isInteger(n)) return String(n);
+      return String(Math.round(n * 1000) / 1000);
+    }
+    return v;
+  }
+  return String(v);
+}
+
+
 let WS_SETTINGS = Object.assign(
   { project_type: 'B', max_plasticity: '硬塑', include_test: false, use_std_stratum: false },
   JSON.parse(localStorage.getItem('ws_settings') || '{}')
@@ -1333,9 +1315,9 @@ async function renderWorkspace(){
       <div class="ws-panel">
         <div id="wsTabs" style="display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--hairline);"></div>
         <div class="ws-toolbar">
-          <select id="dataTableSel" style="height:34px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 10px;background:#fff;min-width:200px;font-size:13px;"></select>
-          <div class="search-in" style="flex:1;max-width:260px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
+          <div class="search-in" style="flex:1;max-width:280px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
           <button class="btn btn-secondary" style="padding:6px 14px;font-size:12.5px;" onclick="loadOnlinePage(1)">刷新</button>
+          <span style="font-size:11.5px;color:var(--muted);" id="wsCurTable"></span>
         </div>
         <div style="overflow-x:auto;min-height:300px;" id="onlineGrid"></div>
         <div class="pagination" style="padding:10px 16px;">
@@ -1437,7 +1419,7 @@ async function wsSelectHole(zk){
   if (!API_STATE.tables) await wsInitTables();
   wsSetTab('z_g_TuCeng');
   const si = document.getElementById('onlineSearch');
-  if (si) { si.value = zk; OData.keyword = zk; OData.searchCol = 'ZKBH'; OData.page = 1; }
+  if (si) { si.value = zk; OData.keyword = zk; OData.searchCol = 'ZKBH'; OData.page = 1; OData.exact = true; }
   await loadOnlinePage(1);
 }
 
@@ -1451,24 +1433,27 @@ async function wsInitTables(){
       saveApiState();
     } catch (e) { return; }
   }
-  const sel = document.getElementById('dataTableSel');
   const names = Object.keys(API_STATE.tables);
   if (!names.length) return;
   if (!OData.table || !names.includes(OData.table)) OData.table = names[0];
-  if (sel) {
-    sel.innerHTML = names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('');
-    if (!WS_TABS_DONE) {
-      WS_TABS_DONE = true;
-      sel.addEventListener('change', e => { OData.table = e.target.value; OData.page = 1; OData.keyword = ''; const si = document.getElementById('onlineSearch'); if (si) si.value = ''; wsMarkTab(); loadOnlinePage(1); });
-    }
-  }
-  // 页签：地层/土工试验/动探/标贯/水位（表存在才显示）
+  const cur = document.getElementById('wsCurTable');
+  if (cur) cur.textContent = '当前表：' + (COLUMN_CN[OData.table] || OData.table);
   const tabs = document.getElementById('wsTabs');
   if (tabs) {
     const defs = [['z_g_TuCeng','地层'],['z_c_QuYang','土工试验'],['z_y_DongTan','动探'],['z_y_BiaoGuan','标贯'],['z_g_ShuiWei','水位']];
     tabs.innerHTML = defs.filter(d => names.includes(d[0])).map(d =>
       '<div data-t="' + d[0] + '" onclick="wsSetTab(\'' + d[0] + '\')" style="padding:7px 14px;font-size:12.5px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:var(--steel);border-bottom:2px solid transparent;">' + d[1] + '</div>').join('');
     wsMarkTab();
+  }
+  // 手动搜索（回车）→ 取消精确匹配
+  const si = document.getElementById('onlineSearch');
+  if (si && !si.dataset.bound) {
+    si.dataset.bound = '1';
+    si.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        OData.keyword = si.value.trim(); OData.exact = false; OData.page = 1; loadOnlinePage(1);
+      }
+    });
   }
 }
 function wsMarkTab(){
@@ -1482,16 +1467,14 @@ function wsMarkTab(){
   });
 }
 function wsSetTab(tbl){
-  OData.table = tbl; OData.page = 1; OData.keyword = ''; OData.searchCol = '';
-  const sel = document.getElementById('dataTableSel');
-  if (sel) sel.value = tbl;
+  OData.table = tbl; OData.page = 1; OData.keyword = ''; OData.searchCol = ''; OData.exact = false;
   const si = document.getElementById('onlineSearch');
   if (si) { si.value = ''; }
+  const cur = document.getElementById('wsCurTable');
+  if (cur) cur.textContent = '当前表：' + (COLUMN_CN[tbl] || tbl);
   wsMarkTab();
   loadOnlinePage(1);
 }
-
-/* ============ 修正与成果（批量修正 + 统计 + DXF） ============ */
 async function renderTools(){
   const el = document.getElementById('content');
   if (!API_STATE.online || !API_STATE.dbId) {
@@ -1608,33 +1591,99 @@ async function renderConfig(){
     el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--slate);">请先上传数据库（在线模式）后查看/编辑工程配置。</div>';
     return;
   }
-  el.innerHTML = '<h1 class="page-title">参数中心</h1><p class="page-sub">加载工程配置.toml…</p><div style="padding:40px;text-align:center;color:var(--slate);">读取中…</div>';
+  el.innerHTML = '<h1 class="page-title">参数中心</h1><p class="page-sub">加载工程配置…</p><div style="padding:40px;text-align:center;color:var(--slate);">读取中…</div>';
   try {
     const g = await apiGet('/db/' + API_STATE.dbId + '/config', { timeout: 30000 });
-    const ov = Object.keys(g.overview || {}).map(k => '<span style="background:var(--tint-sky);padding:2px 10px;border-radius:10px;font-size:12px;margin-right:6px;">' + escHtml(k) + ':' + escHtml(g.overview[k]) + '</span>').join('');
+    if (!g.structured || !Object.keys(g.structured).length) {
+      el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">配置解析失败：请检查 参数/工程配置.toml</div>';
+      return;
+    }
+    const st = g.structured;
+    const secs = Object.keys(st).map(sec => {
+      return '<div class="ws-panel" style="margin-bottom:14px;"><div class="p-head">' + escHtml(sec) + '</div><div style="padding:6px 16px 14px;">' + renderCfgSection(sec, st[sec], sec) + '</div></div>';
+    }).join('');
     el.innerHTML = `
-      <h1 class="page-title">参数中心</h1>
-      <p class="page-sub">工程配置.toml · ${g.size} 字节 · 保存前自动备份 .bak</p>
-      <div style="margin-bottom:10px;">${ov || ''}</div>
-      <textarea id="cfgText" spellcheck="false" style="width:100%;height:55vh;font-family:Consolas,monospace;font-size:12px;border:1px solid var(--border);border-radius:8px;padding:12px;box-sizing:border-box;background:var(--card);color:var(--slate);white-space:pre;">${escHtml(g.raw_text)}</textarea>
-      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
-        <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
-        <button class="btn btn-secondary" onclick="route('config')">重新加载</button>
-        <span id="cfgStatus" style="font-size:12px;color:var(--slate);"></span>
-      </div>`;
+      <div class="ws-head">
+        <div>
+          <div class="ws-title">参数中心</div>
+          <div class="ws-sub">工程配置.toml · ${g.size} 字节 · 保存前自动备份 .bak · 保存后复核立即生效</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="route('config')">重新加载</button>
+          <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+        </div>
+      </div>
+      ${secs}
+      <div id="cfgStatus" style="font-size:13px;color:var(--slate);margin-top:6px;"></div>`;
   } catch (e) {
     el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">读取失败：' + escHtml((e && e.message) || e) + '</div>';
   }
 }
+function renderCfgSection(sec, obj, prefix){
+  if (Array.isArray(obj) && obj.length && typeof obj[0] === 'object') {
+    const base = prefix || sec;
+    return obj.map((item, i) =>
+      '<div style="background:var(--surface-soft);border-radius:10px;padding:4px 12px 8px;margin:6px 0;">' +
+      Object.keys(item).map(sk => cfgRow(base + '_i' + i + '_' + sk, item[sk], true)).join('') + '</div>').join('');
+  }
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
+    return cfgRow(prefix || sec, obj);
+  }
+  return Object.keys(obj).map(k => {
+    const v = obj[k];
+    const key = prefix ? prefix + '.' + k : k;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      return '<div style="margin:8px 0 2px;font-size:12px;font-weight:700;color:var(--steel);">' + escHtml(k) + '</div>' + renderCfgSection(sec, v, key);
+    }
+    return cfgRow(key, v);
+  }).join('');
+}
+function cfgRow(key, v, ro){
+  let control, dtype = 'str';
+  const disabled = ro ? ' disabled style="background:var(--surface);color:var(--muted);"' : '';
+  if (typeof v === 'boolean') {
+    dtype = 'bool';
+    control = '<label class="switch" style="transform:scale(.9);"><input type="checkbox" data-path="' + escAttr(key) + '" data-type="bool"' + (v ? ' checked' : '') + (ro ? ' disabled' : '') + '><span></span></label>';
+  } else if (typeof v === 'number') {
+    dtype = 'num';
+    control = '<input data-path="' + escAttr(key) + '" data-type="num" type="number" step="any" value="' + escAttr(v) + '"' + disabled + ' style="width:120px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">';
+  } else if (Array.isArray(v)) {
+    dtype = 'arr';
+    control = '<input data-path="' + escAttr(key) + '" data-type="arr" value="' + escAttr(v.map(x => typeof x === 'string' ? x : String(x)).join(', ')) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;" placeholder="逗号分隔">';
+  } else {
+    control = '<input data-path="' + escAttr(key) + '" data-type="str" value="' + escAttr(String(v)) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">';
+  }
+  return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f2;"><span style="flex:0 0 220px;font-size:12.5px;color:var(--charcoal);" title="' + escAttr(key) + '">' + escHtml(key.split('.').pop()) + (ro ? ' <span style="color:var(--muted);font-size:11px;">(只读)</span>' : '') + '</span>' + control + '</div>';
+}
+function tomlEscapeStr(s){
+  return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
+}
+function cfgValToToml(v){
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'number') return String(v);
+  return tomlEscapeStr(String(v));
+}
 async function saveConfig(){
-  const raw = document.getElementById('cfgText').value;
   const st = document.getElementById('cfgStatus');
-  st.textContent = '保存中…'; st.style.color = 'var(--slate)';
+  if (st) { st.textContent = '正在收集修改…'; st.style.color = 'var(--slate)'; }
   try {
-    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { raw_text: raw });
-    st.textContent = '✓ 已保存（' + r.size + ' 字节，备份 ' + r.backup + '）'; st.style.color = 'var(--success)';
+    const updates = {};
+    document.querySelectorAll('#content [data-path]').forEach(el => {
+      if (el.disabled) return;
+      const path = el.dataset.path, type = el.dataset.type;
+      if (type === 'bool') updates[path] = el.checked;
+      else if (type === 'num') updates[path] = el.value === '' ? 0 : Number(el.value);
+      else if (type === 'arr') updates[path] = el.value.split(',').map(s => s.trim()).filter(Boolean).map(s => /^\d+(\.\d+)?$/.test(s) ? Number(s) : s);
+      else updates[path] = el.value;
+    });
+    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { updates });
+    if (st) {
+      st.textContent = '✓ 已保存 ' + (r.applied || 0) + ' 项' + ((r.missing || []).length ? '，未识别 ' + r.missing.length + ' 项（表数组只读）' : '') + ' · 备份 ' + (r.backup || '') + ' · 保留注释';
+      st.style.color = 'var(--success)';
+    }
+    showToast('配置已保存（保留注释），复核口径已更新', 'info');
   } catch (e) {
-    st.textContent = '✗ 保存失败：' + ((e && e.message) || e); st.style.color = 'var(--error)';
+    if (st) { st.textContent = '✗ 保存失败：' + ((e && e.message) || e); st.style.color = 'var(--error)'; }
   }
 }
 
@@ -1719,9 +1768,6 @@ async function renderSpt(){
     </div>
   `;
 }
-/* ============================================================
-   视图：数据库接入（在线：上传解析 / 本地：演示模式）
-   ============================================================ */
 let pendingMdbFile = null;
 async function renderMdb(){
   if (!API_STATE.checked) await detectBackend();
@@ -1846,9 +1892,6 @@ async function uploadMdbFile(){
 }
 
 
-/* ============================================================
-   视图：数据管理 · 在线模式（选库选表 → 分页/搜索 → CRUD）
-   ============================================================ */
 const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', columns: [], total: 0, debounce: null };
 async function renderDataOnline(){
   if (!API_STATE.online || !API_STATE.dbId) return renderData();
@@ -1922,7 +1965,7 @@ async function loadOnlinePage(page){
   if (sc) OData.searchCol = sc.value;
   let q = '/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table)
         + '?page=' + OData.page + '&page_size=' + OData.pageSize;
-  if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol);
+  if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol) + '&exact=' + (OData.exact ? '1' : '0');
   const info = document.getElementById('onlinePgInfo');
   if (info) info.textContent = '查询中…';
   try {
@@ -1937,7 +1980,11 @@ async function loadOnlinePage(page){
 
 function renderOnlineRows(rows){
   OData.rowCache = {};
-  const cols = (OData.columns || []).filter(c => c !== 'id');
+  const tbl = OData.table || '';
+  const all = (OData.columns || []).filter(c => c !== 'id');
+  const cols = WS_COLS[tbl]
+    ? WS_COLS[tbl].filter(c => all.includes(c))
+    : all;
   const grid = document.getElementById('onlineGrid');
   const info = document.getElementById('onlinePgInfo');
   const totalPages = Math.max(1, Math.ceil(OData.total / OData.pageSize));
@@ -1945,19 +1992,15 @@ function renderOnlineRows(rows){
   const prev = document.getElementById('onlinePrev'), next = document.getElementById('onlineNext');
   if (prev) prev.disabled = OData.page <= 1;
   if (next) next.disabled = OData.page >= totalPages;
-  const sc = document.getElementById('onlineSearchCol');
-  if (sc && sc.options.length <= 1) {
-    cols.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sc.appendChild(o); });
-  }
-  const gridCols = ['70px', ...cols.map(() => 'minmax(120px, 1fr)'), '120px'].join(' ');
-  const minW = Math.max(640, cols.length * 120 + 220);
-  const head = '<div class="t-head" style="grid-template-columns:' + gridCols + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;"><div>id</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(c) + '</div>').join('') + '<div>操作</div></div>';
+  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 220 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '2fr' : '1fr') + ')')).join(' ');
+  const minW = Math.max(640, cols.length * 90 + 160);
+  const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;"><div>#</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(COLUMN_CN[c] || c) + '</div>').join('') + '<div>操作</div></div>';
   const body = rows.length ? rows.map(row => {
     const idJs = JSON.stringify(row.id == null ? '' : row.id).replace(/"/g, '');
     OData.rowCache[String(row.id)] = row;
-    return '<div class="t-row" style="grid-template-columns:' + gridCols + ';padding:0 14px;min-width:' + minW + 'px;">' +
+    return '<div class="t-row" style="grid-template-columns:' + gridColsReal + ';padding:0 14px;min-width:' + minW + 'px;">' +
       '<div class="muted">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
-      cols.map(c => '<div class="name" style="font-size:13px;" title="' + escAttr(row[c] ?? '') + '">' + escHtml(row[c] ?? '') + '</div>').join('') +
+      cols.map(c => '<div style="font-size:12.5px;' + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="' + escAttr(fmtNum(row[c])) + '">' + escHtml(fmtNum(row[c])) + '</div>').join('') +
       '<div>' +
         (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
         (can('data_edit') && can('data_delete') ? ' · ' : '') +
@@ -2005,9 +2048,6 @@ async function delOnlineRow(id){
 }
 
 
-/* ============================================================
-   视图：生成 MDB（POST /build → 每 10 秒轮询 → 下载产物）
-   ============================================================ */
 const BuildState = { running: false, timer: null, tries: 0, runId: null };
 function stopBuildPoll(){
   if (BuildState.timer) { clearInterval(BuildState.timer); BuildState.timer = null; }

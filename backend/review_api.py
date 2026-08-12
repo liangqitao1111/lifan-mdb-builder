@@ -290,26 +290,77 @@ def get_config(db_id: str):
     if not os.path.exists(p):
         raise HTTPException(404, f"配置文件不存在: {p}")
     raw = io_open(p, "utf-8").read()
+    structured = None
+    overview = {}
     try:
         import tomllib
         data = tomllib.loads(raw)
+        structured = data
         overview = {k: (len(v) if isinstance(v, dict) else type(v).__name__) for k, v in data.items()}
     except Exception as e:
         overview = {"解析失败": str(e)}
-    return {"path": p, "size": len(raw), "raw_text": raw, "overview": overview}
+    return {"path": p, "size": len(raw), "raw_text": raw,
+            "structured": structured, "overview": overview}
 
 
 @router.put("/config")
 def put_config(db_id: str, payload: dict):
-    """保存工程配置.toml：先 tomllib 校验语法，非法拒绝写入"""
+    """保存工程配置.toml：优先 updates 补丁（TomlFile 行级替换保留注释），
+    兼容旧 raw_text 整写（tomllib 校验）"""
+    p = _config_path()
+    if not os.path.exists(p):
+        raise HTTPException(404, f"配置文件不存在: {p}")
+    updates = (payload or {}).get("updates")
+    if isinstance(updates, dict) and updates:
+        try:
+            from review.toml_preserve import TomlFile
+            tf = TomlFile(p)
+            ok, missing = 0, []
+            for path, val in updates.items():
+                if tf.set(path, val):
+                    ok += 1
+                else:
+                    missing.append(path)
+            if not tf.is_dirty():
+                return {"ok": True, "applied": 0, "unchanged": True}
+            # 备份后保存（保留注释的行级写入）
+            import shutil
+            shutil.copy2(p, p + ".bak")
+            tf.save(p)
+            # 清 config 缓存
+            try:
+                import review.config as rcfg
+                rcfg._PROJECT_CONFIG = None
+            except Exception:
+                pass
+            return {"ok": True, "applied": ok,
+                    "missing": missing[:20] if missing else None,
+                    "backup": os.path.basename(p) + ".bak"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"补丁保存失败: {e}")
     raw = (payload or {}).get("raw_text")
     if not raw or not isinstance(raw, str):
-        raise HTTPException(400, "缺少 raw_text")
+        raise HTTPException(400, "缺少 updates 或 raw_text")
     try:
         import tomllib
-        tomllib.loads(raw)
+        new_cfg = tomllib.loads(raw)
     except Exception as e:
         raise HTTPException(422, f"TOML 语法错误，拒绝保存: {e}")
+    # 完整性防护：核心段缺失视为损坏，拒绝覆盖（防丢键写坏配置）
+    if os.path.exists(_config_path()):
+        try:
+            with open(_config_path(), "r", encoding="utf-8") as f:
+                old_cfg = tomllib.loads(f.read())
+            core = [k for k in ("公用", "A类", "B类") if k in old_cfg]
+            missing = [k for k in core if k not in new_cfg]
+            if missing:
+                raise HTTPException(422, f"配置缺少核心段 {missing}，拒绝保存（配置可能损坏）")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     p = _config_path()
     # 备份后写入（保留旧版可回滚）
     try:

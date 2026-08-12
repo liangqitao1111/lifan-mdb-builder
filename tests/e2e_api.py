@@ -136,6 +136,8 @@ def test_crud_write_roundtrip(db_id):
     updated = next((x for x in r2.json()["rows"] if x.get("id") == row_id), None)
     assert updated is not None, "修改后行未找到"
     assert abs(float(updated[field]) - new) < 1e-6, f"回读不一致: {updated[field]} vs {new}"
+    # 恢复原值（测试不污染 fixture 库）
+    client.put(f"/api/db/{db_id}/table/{t}/{row_id}", json={"data": {field: old}})
 
 
 def test_desktop_consistency():

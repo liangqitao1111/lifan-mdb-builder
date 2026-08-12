@@ -204,16 +204,21 @@ def list_tables(db_path):
         conn.close()
 
 
-def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None):
-    """分页读表；keyword 匹配 search_col（或所有文本列）"""
+def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None, exact=False):
+    """分页读表；keyword 匹配 search_col（或所有文本列）；exact=True 按指定列精确匹配
+    （钻孔编号精确过滤，避免 LIKE 前缀相似孔号污染：'26-ZD-GZXT-1' 误匹配 10/11/12…）"""
     conn = conn_for(db_path)
     try:
         cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')]
         where, params = "", []
         if keyword:
-            targets = [search_col] if search_col else [c for c in cols]
-            where = " WHERE " + " OR ".join(f'CAST("{c}" AS TEXT) LIKE ?' for c in targets)
-            params = [f"%{keyword}%"] * len(targets)
+            if exact and search_col:
+                where = f' WHERE CAST("{search_col}" AS TEXT) = ?'
+                params = [str(keyword)]
+            else:
+                targets = [search_col] if search_col else [c for c in cols]
+                where = " WHERE " + " OR ".join(f'CAST("{c}" AS TEXT) LIKE ?' for c in targets)
+                params = [f"%{keyword}%"] * len(targets)
         total = conn.execute(f'SELECT COUNT(*) FROM "{table}" {where}', params).fetchone()[0]
         offset = (page - 1) * page_size
         rows = conn.execute(
