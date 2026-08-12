@@ -1646,7 +1646,7 @@ async function toolsIssues(){
   box.innerHTML = '<div style="padding:24px;color:var(--steel);">正在导出复核问题清单…</div>';
   try {
     const r = await apiPost('/db/' + API_STATE.dbId + '/issues-export', { include_test: false });
-    box.innerHTML = '<div style="padding:16px 20px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b> <a href="' + escAttr(r.download || '') + '" download style="color:var(--primary);font-weight:600;margin-left:10px;">下载</a></div>';
+    box.innerHTML = '<div style="padding:16px 20px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b> <button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;margin-left:10px;" onclick="dlStats(this.dataset.f)" data-f="' + escAttr(r.file || '') + '">下载</button></div>';
   } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">导出失败：' + escHtml((e && e.message) || e) + '</div>'; }
 }
 
@@ -1728,7 +1728,7 @@ async function toolsDxfRun(kind){
     const dl = r.download || '';
     const box = document.getElementById('toolsResult');
     if (box) box.insertAdjacentHTML('beforeend',
-      '<div style="margin-top:10px;padding:12px 16px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b>（' + (r.placed !== undefined ? '放置 ' + r.placed + ' 处' : '') + '） <a href="' + escAttr(dl) + '" download style="color:var(--primary);font-weight:600;margin-left:8px;">下载</a></div>');
+      '<div style="margin-top:10px;padding:12px 16px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b>（' + (r.placed !== undefined ? '放置 ' + r.placed + ' 处' : '') + '） <button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;margin-left:8px;" onclick="dlDxf(this.dataset.f)" data-f="' + escAttr(r.file || '') + '">下载</button></div>');
     if (st) { st.textContent = '完成'; st.style.color = 'var(--success)'; }
   } catch (e) {
     if (st) { st.textContent = '失败：' + ((e && e.message) || e); st.style.color = 'var(--error)'; }
@@ -1769,6 +1769,28 @@ async function renderConfig(){
     el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">读取失败：' + escHtml((e && e.message) || e) + '</div>';
   }
 }
+const STATE_ORDER = ['松散','稍密','中密','密实','流塑','软塑','可塑','硬塑','坚硬','不限制'];
+const RANGE_KEY_RE = /^[\d.≤≥<>~×\s-]+$/;
+function isStateMap(obj){
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+  const keys = Object.keys(obj);
+  if (!keys.length) return false;
+  const rangeKeys = keys.filter(k => k !== '用途' && RANGE_KEY_RE.test(k));
+  return rangeKeys.length >= 2;
+}
+function renderStateMap(key, obj){
+  // 反转展示：状态词为行标签，区间为输入值（data-path 仍用原始区间键，保存逻辑不变）
+  const rows = Object.entries(obj).filter(([k]) => k !== '用途');
+  const order = {};
+  STATE_ORDER.forEach((s, i) => order[s] = i);
+  rows.sort((a, b) => (order[a[1]] ?? 99) - (order[b[1]] ?? 99) || String(a[0]).localeCompare(String(b[0]), 'zh'));
+  const grid = rows.map(([k, v]) =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f2;">' +
+    '<span style="flex:0 0 110px;font-size:13px;font-weight:600;color:var(--charcoal);">' + escHtml(v) + '</span>' +
+    '<input data-path="' + escAttr(key + '.' + k) + '" data-type="str" data-state="' + escAttr(v) + '" value="' + escAttr(k) + '" style="flex:1;max-width:220px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">' +
+    '</div>').join('');
+  return '<div style="margin:6px 0 2px;font-size:12px;font-weight:700;color:var(--steel);">由状态定义数据（状态 → 数据区间）</div>' + grid;
+}
 function renderCfgSection(sec, obj, prefix){
   if (Array.isArray(obj) && obj.length && typeof obj[0] === 'object') {
     const base = prefix || sec;
@@ -1783,6 +1805,9 @@ function renderCfgSection(sec, obj, prefix){
     const v = obj[k];
     const key = prefix ? prefix + '.' + k : k;
     if (v && typeof v === 'object' && !Array.isArray(v)) {
+      if (isStateMap(v)) {
+        return '<div style="margin:10px 0 4px;font-size:12.5px;font-weight:700;color:var(--charcoal);">' + escHtml(k) + '</div>' + renderStateMap(key, v);
+      }
       return '<div style="margin:8px 0 2px;font-size:12px;font-weight:700;color:var(--steel);">' + escHtml(k) + '</div>' + renderCfgSection(sec, v, key);
     }
     return cfgRow(key, v);
@@ -1801,7 +1826,12 @@ function cfgRow(key, v, ro){
     dtype = 'arr';
     control = '<input data-path="' + escAttr(key) + '" data-type="arr" value="' + escAttr(v.map(x => typeof x === 'string' ? x : String(x)).join(', ')) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;" placeholder="逗号分隔">';
   } else {
-    control = '<input data-path="' + escAttr(key) + '" data-type="str" value="' + escAttr(String(v)) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">';
+    const s = String(v);
+    if (s.length > 80) {
+      control = '<textarea data-path="' + escAttr(key) + '" data-type="str"' + (ro ? ' disabled' : '') + ' rows="3" style="flex:1;min-width:220px;border:1px solid var(--hairline-strong);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.5;font-family:inherit;resize:vertical;background:var(--canvas);color:var(--ink);">' + escHtml(s) + '</textarea>';
+    } else {
+      control = '<input data-path="' + escAttr(key) + '" data-type="str" value="' + escAttr(s) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">';
+    }
   }
   return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f2;"><span style="flex:0 0 220px;font-size:12.5px;color:var(--charcoal);" title="' + escAttr(key) + '">' + escHtml(key.split('.').pop()) + (ro ? ' <span style="color:var(--muted);font-size:11px;">(只读)</span>' : '') + '</span>' + control + '</div>';
 }
@@ -1824,7 +1854,7 @@ async function saveConfig(){
       if (type === 'bool') updates[path] = el.checked;
       else if (type === 'num') updates[path] = el.value === '' ? 0 : Number(el.value);
       else if (type === 'arr') updates[path] = el.value.split(',').map(s => s.trim()).filter(Boolean).map(s => /^\d+(\.\d+)?$/.test(s) ? Number(s) : s);
-      else updates[path] = el.value;
+      else updates[path] = el.dataset.state !== undefined ? el.dataset.state : el.value;
     });
     const r = await apiPut('/db/' + API_STATE.dbId + '/config', { updates });
     if (st) {
@@ -1853,7 +1883,7 @@ async function runStats(kind){
     el.insertAdjacentHTML('beforeend', `
       <div class="users-list" style="margin-top:12px;">
         <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">${label} · 下载</h3>
-        ${files.map(f => '<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><span>' + escHtml(f) + '</span><a class="btn btn-secondary" style="padding:4px 14px;text-decoration:none;color:var(--primary);border-color:var(--primary);" href="/api/db/' + API_STATE.dbId + '/stats/download?file=' + encodeURIComponent(f) + '" download>下载</a></div>').join('')}
+        ${files.map(f => '<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><span>' + escHtml(f) + '</span><button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;color:var(--primary);border-color:var(--primary);" onclick="dlStats(this.dataset.f)" data-f="' + escAttr(f) + '">下载</button></div>').join('')}
       </div>`);
   } catch (e) { showToast('生成失败：' + (e && e.message || e), 'err'); }
 }
@@ -2128,13 +2158,44 @@ async function loadOnlinePage(page){
   }
 }
 
+function inlineEdit(cell, rowId, col){
+  if (!can('data_edit')) return;
+  if (cell.dataset.editing) return;
+  const old = cell.textContent;
+  cell.dataset.editing = '1';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = old;
+  inp.style.cssText = 'width:100%;border:none;outline:none;font-size:12.5px;background:transparent;color:var(--ink);';
+  cell.textContent = '';
+  cell.appendChild(inp);
+  inp.focus(); inp.select();
+  const finish = async (save) => {
+    cell.dataset.editing = '';
+    if (!save) { cell.textContent = old; return; }
+    const val = inp.value;
+    cell.textContent = val;
+    try {
+      await apiPut('/db/' + API_STATE.dbId + '/table/' + encodeURIComponent(OData.table) + '/' + rowId,
+                   { data: (function(){ var d = {}; d[col] = val; return d; })() });
+      showToast('已保存', 'info');
+      loadOnlinePage(OData.page);
+    } catch (e) { cell.textContent = old; showToast('保存失败：' + ((e && e.message) || e), 'err'); }
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  inp.addEventListener('blur', () => finish(true));
+}
+
 function renderOnlineRows(rows){
   OData.rowCache = {};
   const tbl = OData.table || '';
   const all = (OData.columns || []).filter(c => c !== 'id');
   const hidden = OData.hiddenCols[tbl] || {};
-  const cols = (WS_COLS[tbl] ? WS_COLS[tbl].filter(c => all.includes(c)) : all)
+  let cols = (WS_COLS[tbl] ? WS_COLS[tbl].filter(c => all.includes(c)) : all)
     .filter(c => !hidden[c]);
+  // 岩土名称同义列去重（TCMC/TCYMC 只显示一个，TCMC 优先）
+  if (cols.includes('TCMC') && cols.includes('TCYMC')) {
+    cols = cols.filter(c => c !== 'TCYMC');
+  }
   const grid = document.getElementById('onlineGrid');
   const info = document.getElementById('onlinePgInfo');
   const totalPages = Math.max(1, Math.ceil(OData.total / OData.pageSize));
@@ -2142,7 +2203,7 @@ function renderOnlineRows(rows){
   const prev = document.getElementById('onlinePrev'), next = document.getElementById('onlineNext');
   if (prev) prev.disabled = OData.page <= 1;
   if (next) next.disabled = OData.page >= totalPages;
-  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 220 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '2fr' : '1fr') + ')')).join(' ');
+  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 260 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '3fr' : '1fr') + ')')).join(' ');
   const minW = Math.max(640, cols.length * 90 + 160);
   const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;"><div>#</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(COLUMN_CN[c] || c) + '</div>').join('') + '<div>操作</div></div>';
   const body = rows.length ? rows.map(row => {
@@ -2150,7 +2211,7 @@ function renderOnlineRows(rows){
     OData.rowCache[String(row.id)] = row;
     return '<div class="t-row" style="grid-template-columns:' + gridColsReal + ';padding:0 14px;min-width:' + minW + 'px;">' +
       '<div class="muted">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
-      cols.map(c => '<div style="font-size:12.5px;' + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="' + escAttr(fmtNum(row[c])) + '">' + escHtml(fmtNum(row[c])) + '</div>').join('') +
+      cols.map(c => '<div style="font-size:12.5px;cursor:pointer;' + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + escHtml(fmtNum(row[c])) + '</div>').join('') +
       '<div>' +
         (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
         (can('data_edit') && can('data_delete') ? ' · ' : '') +
@@ -2335,6 +2396,13 @@ async function downloadWorkDb(){
   if (!API_STATE.dbId) return;
   await downloadApiFile('/db/' + encodeURIComponent(API_STATE.dbId) + '/download', API_STATE.dbId + '_work.db');
 }
+function dlStats(f){
+  downloadApiFile('/db/' + API_STATE.dbId + '/stats/download?file=' + encodeURIComponent(f), f);
+}
+function dlDxf(f){
+  downloadApiFile('/db/' + API_STATE.dbId + '/dxf/download?file=' + encodeURIComponent(f), f);
+}
+
 async function downloadApiFile(path, filename){
   try {
     const res = await apiFetch(path, { silent: true });
