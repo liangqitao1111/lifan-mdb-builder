@@ -226,6 +226,20 @@ a:hover { text-decoration: underline; }
 .toast.show { display: block; }
 .toast.err { background: var(--error); }
 .toast.ok { background: var(--success); }
+
+/* ============== 前后端接线：连接状态条 / 分页 / 构建操作 ============== */
+.connbar { display: flex; align-items: center; gap: 8px; padding: 8px 32px; font-size: 12px; border-bottom: 1px solid var(--hairline); }
+.connbar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 8px; }
+.connbar.ok { background: var(--tint-mint); color: var(--success); }
+.connbar.ok .dot { background: var(--success); }
+.connbar.local { background: var(--surface-soft); color: var(--steel); }
+.connbar.local .dot { background: var(--muted); }
+.connbar a { margin-left: auto; font-weight: 600; cursor: pointer; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--surface-soft); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.pagination .pg-info { color: var(--steel); font-size: 12px; margin-right: auto; }
+.pagination select { border: 1px solid var(--hairline-strong); border-radius: 6px; padding: 4px 6px; background: #fff; color: var(--ink); }
+.build-actions { display: flex; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--hairline-strong); }
+
 </style>
 </head>
 <body>
@@ -280,6 +294,7 @@ a:hover { text-decoration: underline; }
     </div>
     <div class="sb-section">复核闭环</div>
     <a class="nav-item" data-route="mdb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="5" rx="8" ry="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" stroke="currentColor" stroke-width="1.8"/></svg>数据库接入</a>
+    <a class="nav-item" data-route="data"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/></svg>数据管理</a>
     <a class="nav-item" data-route="hub"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 2.5v5.2c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.5L12 3zM8.5 12l2.3 2.3L15.5 9.8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>复核工作台</a>
     <a class="nav-item" data-route="borehole"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5L19.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>钻孔复核</a>
     <a class="nav-item" data-route="spt"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 3v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>批量修正</a>
@@ -300,6 +315,7 @@ a:hover { text-decoration: underline; }
         <div class="avatar"><div class="av-img" id="avLetter">G</div><span id="userLabel">管理员</span></div>
       </div>
     </div>
+    <div class="connbar" id="connBar" hidden></div>
     <div class="content" id="content"></div>
   </div>
 </div>
@@ -354,6 +370,131 @@ async function sha256(s){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s + '_lifan_salt'));
   return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
 }
+
+
+/* ============================================================
+   前后端接线 · API 客户端（V2 契约 docs/API_CONTRACT.md §2）
+   相对路径 /api；file:// 或后端不可达时自动回退本地模式（IndexedDB）
+   ============================================================ */
+const API_STATE = {
+  online: false,        // 后端 /api 可达
+  checked: false,       // 已完成健康探测
+  dbId: null,           // 在线工作库 db_id
+  dbName: '',           // 上传的原始文件名
+  dbSize: 0,            // 上传文件字节数
+  tables: null,         // {表名: 行数}（上传时快照）
+};
+
+function loadApiState(){
+  try {
+    const s = JSON.parse(localStorage.getItem('lifan_api_state') || 'null');
+    if (s && s.dbId) {
+      API_STATE.dbId = s.dbId; API_STATE.dbName = s.dbName || '';
+      API_STATE.dbSize = s.dbSize || 0; API_STATE.tables = s.tables || null;
+    }
+  } catch (e) { /* 本地缓存损坏则忽略 */ }
+}
+function saveApiState(){
+  try {
+    localStorage.setItem('lifan_api_state', JSON.stringify({
+      dbId: API_STATE.dbId, dbName: API_STATE.dbName,
+      dbSize: API_STATE.dbSize, tables: API_STATE.tables,
+    }));
+  } catch (e) { /* 存储失败忽略 */ }
+}
+function clearApiState(){
+  API_STATE.dbId = null; API_STATE.dbName = ''; API_STATE.dbSize = 0; API_STATE.tables = null;
+  try { localStorage.removeItem('lifan_api_state'); } catch (e) {}
+}
+
+class ApiError extends Error {
+  constructor(msg, status){ super(msg); this.status = status || 0; }
+}
+
+async function apiFetch(path, options = {}){
+  const url = '/api' + path;
+  const timeout = options.timeout || 20000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let res;
+  try {
+    const isForm = options.body instanceof FormData;
+    res = await fetch(url, {
+      method: options.method || 'GET',
+      headers: isForm ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      body: options.body === undefined ? undefined : (isForm ? options.body : JSON.stringify(options.body)),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    const msg = e && e.name === 'AbortError' ? '请求超时，请稍后重试' : '无法连接后端服务（' + url + '）';
+    if (!options.silent) showToast(msg, 'err');
+    throw new ApiError(msg);
+  } finally { clearTimeout(timer); }
+  if (!res.ok) {
+    let msg = '请求失败（HTTP ' + res.status + '）';
+    try {
+      const j = await res.json();
+      if (j && j.detail !== undefined) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+    } catch (e) { /* 非 JSON 错误体 */ }
+    if (!options.silent) showToast(msg, 'err');
+    throw new ApiError(msg, res.status);
+  }
+  if (res.status === 204) return null;
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  return ct.includes('application/json') ? res.json() : res;
+}
+function apiGet(path, opts){ return apiFetch(path, opts || {}); }
+function apiPost(path, body, opts){ return apiFetch(path, Object.assign({ method: 'POST', body }, opts || {})); }
+function apiPut(path, body, opts){ return apiFetch(path, Object.assign({ method: 'PUT', body }, opts || {})); }
+function apiDelete(path, opts){ return apiFetch(path, Object.assign({ method: 'DELETE' }, opts || {})); }
+function apiUpload(path, file, opts){
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiFetch(path, Object.assign({ method: 'POST', body: fd, timeout: 120000 }, opts || {}));
+}
+
+/* ---- 后端健康探测 / 页面顶部连接状态条 ---- */
+async function detectBackend(){
+  try {
+    const h = await apiFetch('/health', { timeout: 2500, silent: true });
+    API_STATE.online = !!(h && h.status === 'ok');
+  } catch (e) {
+    API_STATE.online = false;   // 静默降级：不弹错误
+  }
+  API_STATE.checked = true;
+  updateConnBar();
+  return API_STATE.online;
+}
+function updateConnBar(){
+  const bar = document.getElementById('connBar');
+  if (!bar) return;
+  if (API_STATE.online) {
+    bar.className = 'connbar ok';
+    bar.innerHTML = '<span class="dot"></span>在线模式 · 后端健康 ✓' +
+      (API_STATE.dbId ? ' · 工作库 <b>db_id=' + API_STATE.dbId + '</b>' : ' · 尚未上传数据库') +
+      '<a href="javascript:;" onclick="recheckBackend()">重检连接</a>';
+  } else {
+    bar.className = 'connbar local';
+    bar.innerHTML = '<span class="dot"></span>本地模式 · 后端未连接（IndexedDB 演示数据仍可用）' +
+      '<a href="javascript:;" onclick="recheckBackend()">检测后端</a>';
+  }
+  bar.hidden = false;
+}
+async function recheckBackend(){
+  await detectBackend();
+  const r = (location.hash || '').replace('#', '');
+  if (ROUTES.includes(r)) route(r); else render('mdb');
+}
+function fmtSize(n){
+  if (n == null) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1048576).toFixed(2) + ' MB';
+}
+function ts(){ return new Date().toTimeString().slice(0, 8); }
+function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(s){ return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function qsName(form, name){ return form.querySelector('[name="' + String(name).replace(/"/g, '\\"') + '"]'); }
 
 /* ============================================================
    种子数据：首次启动时填充
@@ -431,12 +572,12 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 /* ============================================================
    路由
    ============================================================ */
-const ROUTES = ['mdb','hub','borehole','spt','build'];
+const ROUTES = ['mdb','data','hub','borehole','spt','build'];
 function route(name){
   if (!ROUTES.includes(name)) name = 'mdb';
   location.hash = '#' + name;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.route === name));
-  document.getElementById('crumb').textContent = {mdb:'数据库接入', hub:'复核工作台', borehole:'钻孔复核', spt:'批量修正', build:'生成 MDB'}[name];
+  document.getElementById('crumb').textContent = {mdb:'数据库接入', data:'数据管理', hub:'复核工作台', borehole:'钻孔复核', spt:'批量修正', build:'生成 MDB'}[name];
   render(name);
 }
 window.addEventListener('hashchange', () => route(location.hash.replace('#','')));
@@ -851,6 +992,7 @@ async function toggleUser(id){
    ============================================================ */
 function render(name){
   if (name === 'mdb') return renderMdb();
+  if (name === 'data') return (API_STATE.online && API_STATE.dbId) ? renderDataOnline() : renderData();
   if (name === 'hub') return renderReview();
   if (name === 'borehole') return renderBorehole();
   if (name === 'spt') return renderSpt();
@@ -954,72 +1096,314 @@ async function renderSpt(){
     </div>
   `;
 }
+/* ============================================================
+   视图：数据库接入（在线：上传解析 / 本地：演示模式）
+   ============================================================ */
+let pendingMdbFile = null;
 async function renderMdb(){
+  if (!API_STATE.checked) await detectBackend();
+  const online = API_STATE.online;
+  // 在线且已有 db_id → 尝试恢复表快照；库已失效则清空
+  if (online && API_STATE.dbId && !API_STATE.tables) {
+    try {
+      const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables', { silent: true });
+      API_STATE.tables = {};
+      (r.tables || []).forEach(t => API_STATE.tables[t] = null);
+      saveApiState();
+    } catch (e) {
+      if (e.status === 404) clearApiState();
+    }
+  }
+  const localCounts = online ? null : await localTableCounts();
+  const tblRows = online
+    ? (API_STATE.dbId ? Object.entries(API_STATE.tables || {}) : [])
+    : localCounts;
+
   document.getElementById('content').innerHTML = `
     <h1 class="page-title">数据库接入</h1>
-    <p class="page-sub">上传理正 .lz / Access .mdb · 解析 → 复核 → 生成 .mdb 全流程闭环</p>
+    <p class="page-sub">上传理正 .lz / Access .mdb · 解析 → 在线编辑 → 生成 .mdb 全流程闭环</p>
+    <div class="banner-status" style="${online ? 'background:var(--tint-mint);' : 'background:var(--surface-soft);'}">
+      <div>
+        <h3 style="font-size:15px;font-weight:600;">${online ? (API_STATE.dbId ? '✓ 在线库已接入 · db_id=' + API_STATE.dbId : '✓ 后端在线 · 等待上传') : '本地演示模式（IndexedDB）'}</h3>
+        <p class="muted small" style="margin-top:4px;">${online ? (API_STATE.dbName ? '文件 ' + escHtml(API_STATE.dbName) + ' · ' + fmtSize(API_STATE.dbSize) : '上传后进入在线库模式：浏览 / 编辑 / 生成 .mdb') : '未检测到后端服务，可继续使用本地演示数据；如需真实闭环请启动后端：cd backend && python -m uvicorn main:app --port 8000'}</p>
+      </div>
+      <div class="right" style="font-size:12px;font-weight:600;">${online ? '<span style="color:var(--success);">服务端在线' + (API_STATE.dbId ? ' · <a href="javascript:clearApiState();renderMdb();" style="color:var(--primary);">切换数据库</a>' : '') + '</span>' : '<span style="color:var(--warning);">离线 · 仅本地</span>'}</div>
+    </div>
     <div class="table-card" style="padding:24px;">
       <div class="stat-head" style="justify-content:space-between;margin-bottom:16px;">
         <h3 style="font-size:16px;font-weight:600;">选择数据库文件</h3>
-        <span class="muted" style="font-size:12px;">支持 .lz / .mdb（理正与 Access）</span>
+        <span class="muted" style="font-size:12px;">支持 .lz / .mdb / .accdb（理正与 Access）</span>
       </div>
       <label id="dropZone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:140px;background:var(--tint-lavender);border:1.5px dashed var(--primary);border-radius:12px;cursor:pointer;text-align:center;">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="5" rx="8" ry="3" stroke="#5645d4" stroke-width="1.6"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" stroke="#5645d4" stroke-width="1.6"/></svg>
         <span style="font-size:15px;font-weight:600;color:var(--primary);">拖拽 .lz / .mdb 文件到此处，或点击浏览</span>
         <span class="muted" style="font-size:12px;">上传后由服务端解析 · 单文件 ≤ 200 MB · 理正工程库格式</span>
-        <input type="file" id="mdbFile" accept=".lz,.mdb" style="display:none;">
+        <input type="file" id="mdbFile" accept=".lz,.mdb,.accdb" style="display:none;">
       </label>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
-        <button class="btn btn-primary" onclick="document.getElementById('mdbFile').click()">浏览文件...</button>
-        <span id="mdbStatus" style="display:inline-flex;align-items:center;gap:6px;background:var(--tint-mint);color:var(--success);font-size:12px;font-weight:600;padding:6px 14px;border-radius:15px;"><span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>已连接 lizheng_review.lz · 12.4 MB</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" onclick="document.getElementById('mdbFile').click()">浏览文件...</button>
+          <button class="btn btn-primary" id="uploadBtn" onclick="uploadMdbFile()">上传解析 →</button>
+        </div>
+        <span id="mdbStatus" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-soft);color:var(--steel);font-size:12px;font-weight:600;padding:6px 14px;border-radius:15px;">${pendingMdbFile ? '已选择 ' + escHtml(pendingMdbFile.name) : (online && API_STATE.dbId ? '当前库 ' + escHtml(API_STATE.dbName || API_STATE.dbId) : '未选择文件')}</span>
       </div>
     </div>
     <div class="table-card" style="padding:24px;margin-top:16px;">
       <div class="stat-head" style="justify-content:space-between;margin-bottom:12px;">
-        <h3 style="font-size:16px;font-weight:600;">数据表预览</h3>
-        <span style="color:var(--success);font-size:12px;">共 8 张表 · 1,248 行 · 已解析</span>
+        <h3 style="font-size:16px;font-weight:600;">${online ? '数据表预览（在线库）' : '本地演示数据表'}</h3>
+        <span style="color:var(--success);font-size:12px;">${online ? '共 ' + tblRows.length + ' 张表 · 已解析' : 'IndexedDB · 共 ' + tblRows.length + ' 张表'}</span>
       </div>
-      <div class="t-head" style="grid-template-columns:1fr 90px 60px;height:32px;"><div>表名</div><div>行数</div><div>状态</div></div>
-      <div class="t-row" style="grid-template-columns:1fr 90px 60px;"><div>ZK 钻孔信息表</div><div>256 行</div><div style="color:var(--success);font-size:12px;">已解析</div></div>
-      <div class="t-row" style="grid-template-columns:1fr 90px 60px;"><div>DZ 地层数据表</div><div>532 行</div><div style="color:var(--success);font-size:12px;">已解析</div></div>
-      <div class="t-row" style="grid-template-columns:1fr 90px 60px;"><div>DT 动探记录表</div><div>180 行</div><div style="color:var(--success);font-size:12px;">已解析</div></div>
-      <div class="t-row" style="grid-template-columns:1fr 90px 60px;"><div>SJ 室内试验表</div><div>184 行</div><div style="color:var(--success);font-size:12px;">已解析</div></div>
-      <div class="t-row" style="grid-template-columns:1fr 90px 60px;"><div>RB 日报表</div><div>96 行</div><div style="color:var(--success);font-size:12px;">已解析</div></div>
+      <div class="t-head" style="grid-template-columns:1fr 100px 90px;height:32px;"><div>表名</div><div>行数</div><div>状态</div></div>
+      ${tblRows.length ? tblRows.map(x => `
+        <div class="t-row" style="grid-template-columns:1fr 100px 90px;">
+          <div class="name" style="font-family:Consolas,monospace;font-size:13px;">${escHtml(x[0])}</div>
+          <div>${x[1] == null ? '—' : x[1] + ' 行'}</div>
+          <div style="color:var(--success);font-size:12px;">已解析</div>
+        </div>`).join('') : '<div style="padding:24px;text-align:center;color:var(--steel);font-size:13px;">' + (online ? '尚未上传数据库，请选择文件并点击「上传解析」' : '暂无数据') + '</div>'}
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:16px;">
-      <button class="btn btn-primary" style="height:46px;padding:0 28px;font-size:15px;" onclick="route('hub')">进入复核 →</button>
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:16px;">
+      ${online && API_STATE.dbId ? '<button class="btn btn-secondary" onclick="route(\'data\')">在线浏览数据 →</button><button class="btn btn-primary" style="height:46px;padding:0 28px;font-size:15px;" onclick="route(\'build\')">生成 MDB →</button>' : '<button class="btn btn-primary" style="height:46px;padding:0 28px;font-size:15px;" onclick="route(\'hub\')">进入复核 →</button>'}
     </div>
   `;
-  // 文件选择交互（选择后更新状态）
   const inp = document.getElementById('mdbFile');
   inp.addEventListener('change', () => {
     const f = inp.files && inp.files[0];
     if (!f) return;
+    pendingMdbFile = f;
     const st = document.getElementById('mdbStatus');
-    st.innerHTML = `<span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>已选择 ${f.name} · ${(f.size/1024/1024).toFixed(1)} MB（模拟解析）`;
+    st.innerHTML = '<span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>已选择 ' + escHtml(f.name) + ' · ' + fmtSize(f.size);
     st.style.color = 'var(--success)';
   });
-  document.getElementById('dropZone').addEventListener('dragover', e => e.preventDefault());
-  document.getElementById('dropZone').addEventListener('drop', e => {
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e => e.preventDefault());
+  dz.addEventListener('drop', e => {
     e.preventDefault();
     const f = e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f) return;
+    pendingMdbFile = f;
     const st = document.getElementById('mdbStatus');
-    st.innerHTML = `<span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>已拖入 ${f.name} · ${(f.size/1024/1024).toFixed(1)} MB（模拟解析）`;
+    st.innerHTML = '<span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>已拖入 ' + escHtml(f.name) + ' · ' + fmtSize(f.size);
+    st.style.color = 'var(--success)';
   });
 }
+
+async function localTableCounts(){
+  const out = [];
+  for (const t of ['zk_boreholes', 'dz_strata', 'dt_dynamic', 'sj_lab', 'rb_daily']) {
+    try { out.push([t, (await dbAll(t)).length]); } catch (e) { out.push([t, 0]); }
+  }
+  return out;
+}
+
+async function uploadMdbFile(){
+  if (!API_STATE.online) {
+    showToast('本地模式：后端未连接，无法上传。请先启动后端（cd backend && python -m uvicorn main:app --port 8000）', 'err');
+    return;
+  }
+  if (!pendingMdbFile) { showToast('请先选择 .lz / .mdb / .accdb 文件', 'err'); return; }
+  const btn = document.getElementById('uploadBtn');
+  const st = document.getElementById('mdbStatus');
+  btn.disabled = true; btn.textContent = '上传解析中…';
+  st.innerHTML = '正在上传并解析…'; st.style.color = 'var(--steel)';
+  try {
+    const r = await apiUpload('/upload', pendingMdbFile);
+    API_STATE.dbId = r.db_id;
+    API_STATE.dbName = r.file || pendingMdbFile.name;
+    API_STATE.dbSize = r.size || 0;
+    API_STATE.tables = r.tables || {};
+    saveApiState(); updateConnBar();
+    showToast('上传成功：db_id=' + r.db_id + ' · ' + Object.keys(API_STATE.tables).length + ' 张表');
+    renderMdb();
+  } catch (e) {
+    st.innerHTML = '上传失败：' + escHtml(e.message);
+    st.style.color = 'var(--error)';
+  } finally {
+    btn.disabled = false; btn.textContent = '上传解析 →';
+  }
+}
+
+
+/* ============================================================
+   视图：数据管理 · 在线模式（选库选表 → 分页/搜索 → CRUD）
+   ============================================================ */
+const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', columns: [], total: 0, debounce: null };
+async function renderDataOnline(){
+  if (!API_STATE.online || !API_STATE.dbId) return renderData();
+  if (!API_STATE.tables) {
+    try {
+      const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables');
+      API_STATE.tables = {};
+      (r.tables || []).forEach(t => API_STATE.tables[t] = null);
+      saveApiState();
+    } catch (e) {
+      if (e.status === 404) { clearApiState(); showToast('在线库已失效，已切换本地模式', 'err'); }
+      return renderData();
+    }
+  }
+  const names = Object.keys(API_STATE.tables);
+  if (!OData.table || !names.includes(OData.table)) OData.table = names[0] || null;
+  if (!OData.table) { showToast('当前在线库没有任何表', 'err'); return; }
+  document.getElementById('content').innerHTML = `
+    <h1 class="page-title">数据管理 · 在线模式</h1>
+    <p class="page-sub">在线库 db_id=${API_STATE.dbId} · 选择表后分页浏览与编辑，改动实时写回服务端工作库</p>
+    <div class="toolbar">
+      <div class="tabs">
+        <select id="dataTableSel" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;background:#fff;min-width:220px;">
+          ${names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('')}
+        </select>
+      </div>
+      <div class="t-tools" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <select id="onlineSearchCol" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;background:#fff;">
+          <option value="">全部列</option>
+        </select>
+        <div class="search-in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#787671" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#787671" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
+        <button class="btn btn-secondary" onclick="loadOnlinePage(1)">刷新</button>
+        ${can('data_edit') ? '<button class="btn btn-secondary" style="color:var(--primary);border-color:var(--primary);" onclick="openOnlineEdit(null)">+ 新增</button>' : ''}
+      </div>
+    </div>
+    <div class="table-card">
+      <div style="overflow-x:auto;" id="onlineGrid"></div>
+      <div class="pagination">
+        <span class="pg-info" id="onlinePgInfo">加载中…</span>
+        <select id="onlinePageSize" onchange="OData.pageSize=parseInt(this.value,10);OData.page=1;loadOnlinePage(1)">
+          <option value="20">20 条/页</option><option value="50" selected>50 条/页</option><option value="100">100 条/页</option><option value="200">200 条/页</option>
+        </select>
+        <button class="btn btn-secondary" id="onlinePrev" onclick="loadOnlinePage(OData.page-1)">上一页</button>
+        <button class="btn btn-secondary" id="onlineNext" onclick="loadOnlinePage(OData.page+1)">下一页</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('dataTableSel').addEventListener('change', e => {
+    OData.table = e.target.value; OData.page = 1; OData.keyword = ''; OData.searchCol = '';
+    const sc = document.getElementById('onlineSearchCol');
+    if (sc) sc.innerHTML = '<option value="">全部列</option>';
+    const si = document.getElementById('onlineSearch');
+    if (si) si.value = '';
+    loadOnlinePage(1);
+  });
+  const si = document.getElementById('onlineSearch');
+  si.addEventListener('input', e => {
+    clearTimeout(OData.debounce);
+    OData.debounce = setTimeout(() => { OData.keyword = e.target.value.trim(); OData.page = 1; loadOnlinePage(1); }, 500);
+  });
+  document.getElementById('onlineSearchCol').addEventListener('change', e => { OData.searchCol = e.target.value; OData.page = 1; loadOnlinePage(1); });
+  await loadOnlinePage(1);
+}
+
+async function loadOnlinePage(page){
+  if (!API_STATE.online || !API_STATE.dbId || !OData.table) return;
+  OData.page = Math.max(1, page || 1);
+  const si = document.getElementById('onlineSearch');
+  if (si) OData.keyword = si.value.trim();
+  const sc = document.getElementById('onlineSearchCol');
+  if (sc) OData.searchCol = sc.value;
+  let q = '/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table)
+        + '?page=' + OData.page + '&page_size=' + OData.pageSize;
+  if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol);
+  const info = document.getElementById('onlinePgInfo');
+  if (info) info.textContent = '查询中…';
+  try {
+    const r = await apiGet(q);
+    OData.columns = r.columns || [];
+    OData.total = r.total || 0;
+    renderOnlineRows(r.rows || [], r);
+  } catch (e) {
+    if (info) info.textContent = '查询失败：' + escHtml(e.message);
+  }
+}
+
+function renderOnlineRows(rows){
+  OData.rowCache = {};
+  const cols = (OData.columns || []).filter(c => c !== 'id');
+  const grid = document.getElementById('onlineGrid');
+  const info = document.getElementById('onlinePgInfo');
+  const totalPages = Math.max(1, Math.ceil(OData.total / OData.pageSize));
+  if (info) info.textContent = '共 ' + OData.total + ' 条 · 第 ' + OData.page + ' / ' + totalPages + ' 页' + (OData.keyword ? ' · 关键词「' + OData.keyword + '」' : '');
+  const prev = document.getElementById('onlinePrev'), next = document.getElementById('onlineNext');
+  if (prev) prev.disabled = OData.page <= 1;
+  if (next) next.disabled = OData.page >= totalPages;
+  const sc = document.getElementById('onlineSearchCol');
+  if (sc && sc.options.length <= 1) {
+    cols.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sc.appendChild(o); });
+  }
+  const gridCols = ['70px', ...cols.map(() => 'minmax(120px, 1fr)'), '120px'].join(' ');
+  const minW = Math.max(640, cols.length * 120 + 220);
+  const head = '<div class="t-head" style="grid-template-columns:' + gridCols + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;"><div>id</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(c) + '</div>').join('') + '<div>操作</div></div>';
+  const body = rows.length ? rows.map(row => {
+    const idJs = JSON.stringify(row.id == null ? '' : row.id).replace(/"/g, '');
+    OData.rowCache[String(row.id)] = row;
+    return '<div class="t-row" style="grid-template-columns:' + gridCols + ';padding:0 14px;min-width:' + minW + 'px;">' +
+      '<div class="muted">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
+      cols.map(c => '<div class="name" style="font-size:13px;" title="' + escAttr(row[c] ?? '') + '">' + escHtml(row[c] ?? '') + '</div>').join('') +
+      '<div>' +
+        (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
+        (can('data_edit') && can('data_delete') ? ' · ' : '') +
+        (can('data_delete') ? '<a class="btn-link" style="color:var(--error)" href="javascript:delOnlineRow(' + idJs + ')">删除</a>' : '') +
+      '</div></div>';
+  }).join('') : '<div style="padding:32px;text-align:center;color:var(--steel);">' + (OData.keyword ? '无匹配结果' : '暂无数据') + '</div>';
+  if (grid) grid.innerHTML = '<div style="min-width:100%;">' + head + body + '</div>';
+}
+
+function openOnlineEditById(id){
+  openOnlineEdit(OData.rowCache ? OData.rowCache[String(id)] : null);
+}
+function openOnlineEdit(row){
+  if (!can('data_edit')) return showToast('当前角色无编辑权限', 'err');
+  const cols = (OData.columns || []).filter(c => c !== 'id');
+  const form = document.getElementById('modalForm');
+  document.getElementById('modalTitle').textContent = row ? '编辑数据 · ' + OData.table : '新增数据 · ' + OData.table;
+  form.innerHTML = cols.map(c =>
+    '<div class="form-row"><label>' + escHtml(c) + '</label><input name="' + escAttr(c) + '" value="' + (row ? escAttr(row[c] ?? '') : '') + '" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;"></div>'
+  ).join('') + '<p class="muted small" style="margin-top:4px;">注：id 为服务端主键，不可编辑；保存后立即写回在线工作库。</p>';
+  document.getElementById('modalMask').classList.add('show');
+  document.getElementById('modalOk').onclick = async () => {
+    const data = {};
+    cols.forEach(c => { const el = qsName(form, c); data[c] = el ? el.value : ''; });
+    try {
+      if (row) {
+        await apiPut('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table) + '/' + encodeURIComponent(row.id), { data });
+      } else {
+        await apiPost('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table), { data });
+      }
+      document.getElementById('modalMask').classList.remove('show');
+      showToast(row ? '已保存' : '已新增');
+      loadOnlinePage(row ? OData.page : 1);
+    } catch (e) { /* 错误已由 apiFetch toast */ }
+  };
+}
+async function delOnlineRow(id){
+  if (!can('data_delete')) return showToast('当前角色无删除权限', 'err');
+  if (!confirm('确认删除该条数据？删除后不可恢复。')) return;
+  try {
+    await apiDelete('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table) + '/' + encodeURIComponent(id));
+    showToast('已删除');
+    loadOnlinePage(OData.page);
+  } catch (e) { /* 错误已由 apiFetch toast */ }
+}
+
+
+/* ============================================================
+   视图：生成 MDB（POST /build → 每 10 秒轮询 → 下载产物）
+   ============================================================ */
+const BuildState = { running: false, timer: null, tries: 0, runId: null };
+function stopBuildPoll(){
+  if (BuildState.timer) { clearInterval(BuildState.timer); BuildState.timer = null; }
+  BuildState.running = false;
+}
 async function renderBuild(){
+  if (!API_STATE.checked) await detectBackend();
+  const online = API_STATE.online && !!API_STATE.dbId;
   document.getElementById('content').innerHTML = `
     <h1 class="page-title">生成 MDB · 一键产出理正可用的 .mdb</h1>
     <p class="page-sub">GitHub Actions 免费 Windows 虚拟机 · 安装 ACE OLEDB → SQLite 重建 → 回读校验 → 上传下载</p>
     <div class="banner-status" style="background:var(--navy);color:#fff;justify-content:space-between;">
       <div>
-        <h2 style="color:#fff;font-size:22px;font-weight:700;margin-bottom:6px;">GitHub Actions · 已真实跑通 · 七步全绿</h2>
-        <p style="color:var(--on-dark-muted);font-size:13px;">run #31523773593 · 私有仓库免费 1000 分钟/月（Windows）· 0 元服务器成本</p>
+        <h2 style="color:#fff;font-size:22px;font-weight:700;margin-bottom:6px;">${online ? '在线生成 · 工作库 db_id=' + API_STATE.dbId : (API_STATE.online ? '请先上传数据库' : '当前为本地模式')}</h2>
+        <p style="color:var(--on-dark-muted);font-size:13px;">${online ? (API_STATE.dbName ? '文件 ' + escHtml(API_STATE.dbName) + ' · ' + fmtSize(API_STATE.dbSize) + ' · 触发后约 3-5 分钟完成' : '') : (API_STATE.online ? '后端在线但尚未上传数据库，请先到「数据库接入」上传 .lz / .mdb' : '未连接后端 · 可在本地模式继续浏览演示数据')}</p>
       </div>
-      <button class="btn btn-primary" id="buildBtn" onclick="startBuild()" style="height:56px;padding:0 24px;font-size:15px;background:#fff;color:var(--primary);">触发生成 →</button>
+      <button class="btn btn-primary" id="buildBtn" onclick="startBuild()" style="height:56px;padding:0 24px;font-size:15px;background:#fff;color:var(--primary);" ${online ? '' : 'disabled'}>触发生成 →</button>
     </div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface-soft);border-radius:12px;padding:20px;margin-top:16px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface-soft);border-radius:12px;padding:20px;margin-top:16px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;">1</span><span style="font-size:13px;font-weight:600;">点触发生成</span></div>
       <span style="color:var(--muted);font-size:14px;">→</span>
       <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;">2</span><span style="font-size:13px;font-weight:600;">后端调 GitHub API</span></div>
@@ -1030,61 +1414,131 @@ async function renderBuild(){
     </div>
     <div class="table-card" style="padding:18px;margin-top:16px;">
       <div class="stat-head" style="justify-content:space-between;margin-bottom:12px;">
-        <h3 style="font-size:14px;font-weight:600;">当前任务 #31523773593</h3>
-        <span id="buildBadge" style="display:inline-flex;align-items:center;gap:6px;background:var(--tint-mint);color:var(--success);font-size:12px;font-weight:600;padding:6px 12px;border-radius:12px;"><span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>✓ 已完成 · 全绿</span>
+        <h3 style="font-size:14px;font-weight:600;" id="buildTaskTitle">当前任务 ${online ? '· db_id=' + API_STATE.dbId : '（未开始）'}</h3>
+        <span id="buildBadge" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-soft);color:var(--steel);font-size:12px;font-weight:600;padding:6px 12px;border-radius:12px;">等待触发</span>
       </div>
-      <div id="buildLog" style="background:var(--surface-soft);border-radius:8px;padding:14px;font-family:Consolas,monospace;font-size:12px;color:var(--steel);line-height:2;max-height:150px;overflow-y:auto;">
-        <div>[14:52] 点「触发生成」按钮</div>
-        <div>[14:52] 后端 POST /dispatches 触发</div>
-        <div>[14:53] windows-latest 虚拟机启动</div>
-        <div>[14:54] 装 ACE 驱动 → SQLite 转换</div>
-        <div style="color:var(--success);">[14:55] ✓ 回读校验通过 · 产物已上传</div>
+      <div id="buildLog" style="background:var(--surface-soft);border-radius:8px;padding:14px;font-family:Consolas,monospace;font-size:12px;color:var(--steel);line-height:2;max-height:220px;overflow-y:auto;">
+        <div>${online ? '点击「触发生成」→ 后端 POST /api/db/' + API_STATE.dbId + '/build → 后台触发 GitHub Actions' : '本地模式无法触发构建，请先连接后端并在「数据库接入」上传数据库'}</div>
       </div>
-    </div>
-    <div class="table-card" style="padding:18px;margin-top:16px;">
-      <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;">生成历史 · 12 份</h3>
-      <div class="t-head" style="grid-template-columns:190px 250px 90px 90px 1fr;height:32px;"><div>时间</div><div>文件</div><div>大小</div><div>校验</div><div>操作</div></div>
-      <div class="t-row" style="grid-template-columns:190px 250px 90px 90px 1fr;"><div>2026-08-12 14:45（本轮实测）</div><div>lizheng_review.lz</div><div>208 KB</div><div style="color:var(--success);font-size:12px;">✓ 通过</div><div style="color:var(--primary);font-size:12px;">下载 · 重生 · 删除</div></div>
-      <div class="t-row" style="grid-template-columns:190px 250px 90px 90px 1fr;"><div>2026-08-12 01:18</div><div>lizheng_review.lz</div><div>208 KB</div><div style="color:var(--success);font-size:12px;">✓ 通过</div><div style="color:var(--primary);font-size:12px;">下载 · 重生 · 删除</div></div>
+      <div class="build-actions" id="buildActions" style="display:none;">
+        <button class="btn btn-primary" onclick="downloadArtifact()">下载 .lz 产物</button>
+        <button class="btn btn-secondary" onclick="downloadWorkDb()">下载 work.db</button>
+      </div>
     </div>
   `;
+  if (BuildState.running) {
+    const badge = document.getElementById('buildBadge');
+    const log = document.getElementById('buildLog');
+    const btn = document.getElementById('buildBtn');
+    if (badge) { badge.style.background = 'var(--tint-sky)'; badge.style.color = 'var(--navy)'; badge.innerHTML = '⏳ 生成中 · 已触发（恢复轮询…）'; }
+    if (log) log.innerHTML += '<div>[' + ts() + '] 任务进行中，继续轮询 /build/status（每 10 秒）…</div>';
+    if (btn) { btn.disabled = true; btn.innerHTML = '生成中…'; }
+  }
 }
-// 生成 MDB 交互：模拟真实轮询流程（真实部署时替换为后端 API 调用）
-let buildTimers = [];
-function startBuild(){
+
+async function startBuild(){
+  if (!API_STATE.online) { showToast('本地模式：后端未连接，无法触发 GitHub Actions', 'err'); return; }
+  if (!API_STATE.dbId) { showToast('请先到「数据库接入」上传数据库', 'err'); return; }
+  if (BuildState.running) return;
   const btn = document.getElementById('buildBtn');
-  if (btn.disabled) return;
-  btn.disabled = true;
-  btn.innerHTML = '生成中…';
   const log = document.getElementById('buildLog');
   const badge = document.getElementById('buildBadge');
-  const steps = [
-    '[14:52] 点「触发生成」按钮',
-    '[14:52] 后端 POST /dispatches 触发',
-    '[14:53] windows-latest 虚拟机启动',
-    '[14:54] 装 ACE 驱动 → SQLite 转换',
-    '[14:55] ✓ 回读校验通过 · 产物已上传'
-  ];
-  log.innerHTML = '';
-  buildTimers.forEach(t => clearTimeout(t));
-  buildTimers = [];
-  steps.forEach((s, i) => {
-    buildTimers.push(setTimeout(() => {
-      log.innerHTML += `<div${s.includes('✓') ? ' style="color:var(--success);"' : ''}>${s}</div>`;
-      log.scrollTop = log.scrollHeight;
-      if (i === steps.length - 1) {
-        btn.disabled = false;
-        btn.innerHTML = '重新生成';
-        badge.innerHTML = `<span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block;"></span>✓ 已完成 · 全绿`;
-      } else {
-        badge.innerHTML = `执行中 · 步骤 ${i+1}/${steps.length}`;
-      }
-    }, i * 800));
-  });
+  const actions = document.getElementById('buildActions');
+  btn.disabled = true; btn.innerHTML = '生成中…';
+  if (actions) actions.style.display = 'none';
+  log.innerHTML = '<div>[' + ts() + '] 正在触发构建 POST /api/db/' + API_STATE.dbId + '/build …</div>';
+  try {
+    const r = await apiPost('/db/' + encodeURIComponent(API_STATE.dbId) + '/build');
+    BuildState.running = true; BuildState.tries = 0; BuildState.runId = null;
+    log.innerHTML += '<div style="color:var(--success);">[' + ts() + '] ✓ 已触发：' + escHtml((r && r.message) || '后台执行中') + '</div>';
+    badge.style.background = 'var(--tint-sky)'; badge.style.color = 'var(--navy)';
+    badge.innerHTML = '⏳ 生成中 · 等待 GitHub Actions';
+    BuildState.timer = setInterval(buildPollOnce, 10000);
+    buildPollOnce();
+  } catch (e) {
+    log.innerHTML += '<div style="color:var(--error);">[' + ts() + '] ✗ 触发失败：' + escHtml(e.message) + '</div>';
+    if (e.status === 500) {
+      log.innerHTML += '<div style="color:var(--warning);">[' + ts() + '] 提示：请在后端环境配置 GH_TOKEN（GitHub PAT，需 Actions 权限）后重试；前端不接触任何 token。</div>';
+    }
+    badge.style.background = 'var(--tint-peach)'; badge.style.color = 'var(--error)';
+    badge.innerHTML = '✗ 触发失败';
+    btn.disabled = false; btn.innerHTML = '重新触发';
+  }
 }
+
+async function buildPollOnce(){
+  if (!BuildState.running) return;
+  BuildState.tries++;
+  const log = document.getElementById('buildLog');
+  const badge = document.getElementById('buildBadge');
+  const btn = document.getElementById('buildBtn');
+  const actions = document.getElementById('buildActions');
+  if (!log || !badge || !btn) { stopBuildPoll(); return; }
+  try {
+    const s = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/build/status', { silent: true });
+    const status = (s && s.status) || 'unknown';
+    if (s && s.run_id) BuildState.runId = s.run_id;
+    if (status === 'success') {
+      stopBuildPoll();
+      log.innerHTML += '<div style="color:var(--success);">[' + ts() + '] ✓ 构建成功（run #' + (BuildState.runId || '—') + '）· 产物已缓存，可下载</div>';
+      badge.style.background = 'var(--tint-mint)'; badge.style.color = 'var(--success)';
+      badge.innerHTML = '✓ 已完成 · 生成成功';
+      if (actions) actions.style.display = 'flex';
+      btn.disabled = false; btn.innerHTML = '重新生成';
+    } else if (status === 'failed') {
+      stopBuildPoll();
+      const failDetail = (s && s.error) ? (' · error: ' + s.error) : (' · conclusion: ' + escHtml((s && s.conclusion) || '—'));
+      log.innerHTML += '<div style="color:var(--error);">[' + ts() + '] ✗ 构建失败（run #' + (BuildState.runId || '—') + failDetail + '）</div>';
+      log.innerHTML += '<div style="color:var(--steel);">[' + ts() + '] 可到后端日志查看 workflow 详情（gh run view --log-failed）</div>';
+      badge.style.background = 'var(--tint-peach)'; badge.style.color = 'var(--error)';
+      badge.innerHTML = '✗ 生成失败';
+      btn.disabled = false; btn.innerHTML = '重新触发';
+    } else {
+      if (BuildState.tries >= 120) { // 20 分钟兜底
+        stopBuildPoll();
+        log.innerHTML += '<div style="color:var(--warning);">[' + ts() + '] 等待超时（20 分钟），任务仍在后台执行，可稍后重新进入本页查看。</div>';
+        badge.style.background = 'var(--tint-yellow)'; badge.style.color = 'var(--warning)';
+        badge.innerHTML = '⏳ 仍在执行';
+        btn.disabled = false; btn.innerHTML = '重新触发';
+      } else {
+        log.innerHTML += '<div style="color:var(--steel);">[' + ts() + '] 状态：' + escHtml(status) + (BuildState.runId ? ' · run #' + BuildState.runId : '') + ' · 10 秒后再次查询…</div>';
+        badge.innerHTML = '⏳ 生成中 · 轮询 ' + BuildState.tries + ' 次';
+      }
+    }
+  } catch (e) {
+    stopBuildPoll();
+    log.innerHTML += '<div style="color:var(--warning);">[' + ts() + '] 状态查询失败：' + escHtml(e.message) + ' · 已停止自动轮询（可重新触发或刷新页面）</div>';
+    badge.innerHTML = '⚠ 状态查询中断';
+    btn.disabled = false; btn.innerHTML = '重新触发';
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+async function downloadArtifact(){
+  if (!API_STATE.dbId) return;
+  await downloadApiFile('/db/' + encodeURIComponent(API_STATE.dbId) + '/artifact', API_STATE.dbId + '.lz');
+}
+async function downloadWorkDb(){
+  if (!API_STATE.dbId) return;
+  await downloadApiFile('/db/' + encodeURIComponent(API_STATE.dbId) + '/download', API_STATE.dbId + '_work.db');
+}
+async function downloadApiFile(path, filename){
+  try {
+    const res = await apiFetch(path, { silent: true });
+    const blob = await res.blob();
+    downloadBlob(blob, filename);
+    showToast('已下载：' + filename);
+  } catch (e) {
+    showToast('下载失败：' + e.message, 'err');
+  }
+}
+
+
 async function main(){
   await openDB();
   await seed();
+  loadApiState();
+  detectBackend(); // 异步探测后端：成功→在线模式；失败→静默降级本地模式
   document.getElementById('loginUser').value = 'admin';
   document.getElementById('loginPwd').value = 'admin';
 }

@@ -2,11 +2,16 @@ name: 生成理反 MDB
 
 on:
   repository_dispatch:
-    types: [build-mdb]        # 网页后端触发（repository_dispatch）
-  workflow_dispatch:          # 手动触发测试（GitHub 网页 → Actions → Run workflow）
+    types: [build-mdb]
+
+  workflow_dispatch:
     inputs:
-      sqlite_path:            # SQLite 工作库路径（留空则用 sample/work.db 测试）
-        description: "SQLite 路径（如 payload/work.db；留空用 sample/work.db）"
+      db_id:
+        description: "工程标识（ASCII，默认 sample）"
+        required: false
+        default: "sample"
+      sqlite_path:
+        description: "SQLite 工作库路径（留空则用 sample/work.db 测试）"
         required: false
         default: "sample/work.db"
       schema_path:
@@ -16,7 +21,7 @@ on:
 
 jobs:
   build-mdb:
-    runs-on: windows-latest   # ★ 免费 Windows 虚拟机（2 核 / 7GB / 14GB）
+    runs-on: windows-latest
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -26,22 +31,34 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ── 关键步骤：安装 Access Database Engine（ACE OLEDB）→ 100% 读写 .mdb ──
       - name: 安装 Access Database Engine（ACE x64）
         shell: powershell
         run: |
-          # 下载官方 2016 x64 安装器（直链已验证 200 OK；winget 包默认装 x86，64 位 pyodbc 不可见）
-          curl.exe -L -o ace_x64.exe "https://download.microsoft.com/download/3/5/c/35c84c36-661a-44e6-9324-8786b8dbe231/accessdatabaseengine_X64.exe"
-          # 静默安装（/quiet 无提示，/passive 显示进度可选）
-          Start-Process .\ace_x64.exe -ArgumentList '/quiet' -Wait
-          Start-Sleep -Seconds 10
+          $urls = @(
+            "https://download.microsoft.com/download/3/5/c/35c84c36-661a-44e6-9324-8786b8dbe231/accessdatabaseengine_X64.exe",
+            "https://download.microsoft.com/download/2/8/0/280bf9fa-e94a-4293-aa2a-e5d1c2f8d6a4/AccessDatabaseEngine_X64.exe"
+          )
+          $ok = $false
+
+          foreach ($u in $urls) {
+            try {
+              curl.exe -L --retry 3 -o ace_x64.exe $u
+              if (Test-Path .\ace_x64.exe) { $ok = $true; break }
+            } catch {}
+          }
+          if (-not $ok) {
+            Write-Host "直链下载失败，改用 choco 安装..."
+            choco install accessdatabaseengine -y --no-progress
+          } else {
+            Start-Process .\ace_x64.exe -ArgumentList '/quiet' -Wait
+            Start-Sleep -Seconds 10
+          }
           Remove-Item .\ace_x64.exe -ErrorAction SilentlyContinue
 
-      - name: 安装依赖
+      - name: 安装依赖并验证 ACE 驱动
         shell: bash
         run: |
           pip install pypyodbc==1.3.6 pyodbc==5.3.0 pywin32
-          # 验证 ACE 驱动已注册（pyodbc 就绪后检测，打印全部驱动便于诊断）
           python -X utf8 - <<'EOF'
           import pyodbc
           all_drivers = pyodbc.drivers()
@@ -51,24 +68,47 @@ jobs:
           print('ACE OLEDB ready:', drivers)
           EOF
 
-      - name: 运行 SQLite → MDB 转换
+      - name: 解析构建输入
+        id: inputs
         shell: bash
         run: |
-          SQLITE="${{ inputs.sqlite_path || 'sample/work.db' }}"
-          SCHEMA="${{ inputs.schema_path || 'sample/schema.json' }}"
-          echo "输入: $SQLITE + $SCHEMA"
-          ls -la sample/
-          mkdir -p output
-          python backend/sqlite_to_mdb.py --sqlite "$SQLITE" --schema "$SCHEMA" --out output/lizheng_review.lz
+          DB_ID="${{ github.event.client_payload.db_id || inputs.db_id || 'sample' }}"
+          SQLITE="${{ github.event.client_payload.sqlite || inputs.sqlite_path || 'sample/work.db' }}"
+          SCHEMA="${{ github.event.client_payload.schema || inputs.schema_path || 'sample/schema.json' }}"
+          OUT="${{ github.event.client_payload.out || format('payload/{0}/output.lz', github.event.client_payload.db_id || inputs.db_id || 'sample') }}"
+          echo "db_id=$DB_ID"
+          echo "sqlite=$SQLITE"
+          echo "schema=$SCHEMA"
+          echo "out=$OUT"
+          echo "db_id=$DB_ID"   >> "$GITHUB_OUTPUT"
+          echo "sqlite=$SQLITE" >> "$GITHUB_OUTPUT"
+          echo "schema=$SCHEMA" >> "$GITHUB_OUTPUT"
+          echo "out=$OUT"       >> "$GITHUB_OUTPUT"
 
-      - name: 回读校验（行数一致才算成功）
+      - name: 运行 SQLite → .lz（真 ZIP 包）转换
         shell: bash
         run: |
-          python backend/verify_mdb.py --mdb output/lizheng_review.lz --sqlite sample/work.db
+          DB_ID="${{ steps.inputs.outputs.db_id }}"
+          SQLITE="${{ steps.inputs.outputs.sqlite }}"
+          SCHEMA="${{ steps.inputs.outputs.schema }}"
+          OUT="${{ steps.inputs.outputs.out }}"
+          echo "输入: db_id=$DB_ID  sqlite=$SQLITE  schema=$SCHEMA"
+          ls -la sample/
+          mkdir -p "$(dirname "$OUT")"
+          python backend/sqlite_to_mdb.py --sqlite "$SQLITE" --schema "$SCHEMA" --out "$OUT" --db-id "$DB_ID"
+
+      - name: 回读校验（行数 + 抽样 50 行全列值一致才算成功）
+        shell: bash
+        run: |
+          SQLITE="${{ steps.inputs.outputs.sqlite }}"
+          SCHEMA="${{ steps.inputs.outputs.schema }}"
+          OUT="${{ steps.inputs.outputs.out }}"
+          python backend/verify_mdb.py --mdb "$OUT" --sqlite "$SQLITE" --schema "$SCHEMA"
 
       - name: 上传 MDB 产物
         uses: actions/upload-artifact@v4
         with:
           name: lizheng_review_mdb
-          path: output/*.lz
+          path: ${{ steps.inputs.outputs.out }}
+          if-no-files-found: error
           retention-days: 30

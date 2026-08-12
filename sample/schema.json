@@ -1,97 +1,160 @@
 {
-  "version": "1.0",
+  "version": 2,
+  "db_id": "sample01",
   "tool": "理反 Web",
   "tables": {
     "ZK": {
-      "comment": "钻孔信息表",
-      "columns": {
-        "钻孔编号": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(50)"
+      "comment": "钻孔信息表（含注入 id 列，重建时跳过）",
+      "columns": [
+        {
+          "name": "钻孔编号",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(50)",
+          "primary_key": false
         },
-        "层号": {
-          "type": "INTEGER",
-          "mdb_type": "LONG"
+        {
+          "name": "层号",
+          "sqlite_type": "INTEGER",
+          "mdb_type": "LONG",
+          "primary_key": false
         },
-        "层底深度": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "层底深度",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
         },
-        "层厚": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "层厚",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
         },
-        "岩土定名": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(100)"
+        {
+          "name": "岩土定名",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(100)",
+          "primary_key": false
         },
-        "状态": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(20)"
+        {
+          "name": "状态",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(20)",
+          "primary_key": false
+        },
+        {
+          "name": "id",
+          "sqlite_type": "INTEGER",
+          "mdb_type": "LONG",
+          "injected_id": true
         }
-      }
+      ]
     },
     "DZ": {
-      "comment": "地层数据表",
-      "columns": {
-        "钻孔编号": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(50)"
+      "comment": "地层数据表（覆盖 MEMO / DATETIME / LONGBINARY）",
+      "columns": [
+        {
+          "name": "钻孔编号",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(50)",
+          "primary_key": false
         },
-        "层号": {
-          "type": "INTEGER",
-          "mdb_type": "LONG"
+        {
+          "name": "层号",
+          "sqlite_type": "INTEGER",
+          "mdb_type": "LONG",
+          "primary_key": false
         },
-        "岩土定名": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(100)"
+        {
+          "name": "岩土定名",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(100)",
+          "primary_key": false
         },
-        "描述": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(255)"
+        {
+          "name": "描述",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(255)",
+          "primary_key": false
         },
-        "密实度": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(20)"
+        {
+          "name": "密实度",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(20)",
+          "primary_key": false
         },
-        "湿度": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(20)"
+        {
+          "name": "湿度",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(20)",
+          "primary_key": false
         },
-        "N63_5": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "N63_5",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
         },
-        "承载力": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "承载力",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
+        },
+        {
+          "name": "试验日期",
+          "sqlite_type": "DATETIME",
+          "mdb_type": "DATETIME",
+          "primary_key": false
+        },
+        {
+          "name": "照片",
+          "sqlite_type": "BLOB",
+          "mdb_type": "LONGBINARY",
+          "primary_key": false
+        },
+        {
+          "name": "备注",
+          "sqlite_type": "TEXT",
+          "mdb_type": "MEMO",
+          "primary_key": false
         }
-      }
+      ]
     },
     "DT": {
-      "comment": "动探记录表",
-      "columns": {
-        "钻孔编号": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(50)"
+      "comment": "动探记录表（深度列声明主键）",
+      "columns": [
+        {
+          "name": "钻孔编号",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(50)",
+          "primary_key": false
         },
-        "深度": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "深度",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": true
         },
-        "击数": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "击数",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
         },
-        "类型": {
-          "type": "TEXT",
-          "mdb_type": "TEXT(20)"
+        {
+          "name": "类型",
+          "sqlite_type": "TEXT",
+          "mdb_type": "TEXT(20)",
+          "primary_key": false
         },
-        "杆长": {
-          "type": "REAL",
-          "mdb_type": "DOUBLE"
+        {
+          "name": "杆长",
+          "sqlite_type": "REAL",
+          "mdb_type": "DOUBLE",
+          "primary_key": false
         }
-      }
+      ]
     }
   }
 }

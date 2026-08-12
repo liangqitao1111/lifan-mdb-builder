@@ -1,3 +1,4 @@
+output/
 # 运行时数据（上传的 mdb / 工作库 / 测试产物）
 work/
 # Python 缓存
