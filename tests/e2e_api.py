@@ -190,3 +190,15 @@ def test_config_get_put(db_id):
     good = client.put(f"/api/db/{db_id}/config", json={"raw_text": raw})
     assert good.status_code == 200, good.text[:200]
     assert good.json()["ok"]
+
+
+def test_review_include_test(db_id):
+    """复核设置口径：include_test 开关影响问题数（与桌面端 enable_test_review 一致）"""
+    off = client.post(f"/api/db/{db_id}/review?include_test=false&project_type=B", json={})
+    on = client.post(f"/api/db/{db_id}/review?include_test=true&project_type=B", json={})
+    assert off.status_code == 200 and on.status_code == 200
+    t_off, t_on = off.json()["summary"]["total"], on.json()["summary"]["total"]
+    assert t_off >= 0 and t_on >= t_off, f"含土工判别问题数应≥不含土工: {t_on} vs {t_off}"
+    if IS_REAL:
+        assert t_off == 50, f"B类无土工应 50（桌面端 enable_test_review=False 口径），实际 {t_off}"
+        assert t_on == 147, f"B类含土工应 147（桌面端一致），实际 {t_on}"

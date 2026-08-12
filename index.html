@@ -279,6 +279,14 @@ a:hover { text-decoration: underline; }
 .ws-tool-card .card .t { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
 .ws-tool-card .card .d { font-size: 12.5px; color: var(--slate); line-height: 1.5; }
 .ws-tool-card .card .a { display: inline-block; margin-top: 12px; color: var(--primary); font-size: 13px; font-weight: 600; }
+
+/* 复核设置开关 */
+.switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: 0 0 auto; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; background: #c7c7cc; border-radius: 999px; transition: .2s; }
+.switch span:before { content: ""; position: absolute; width: 22px; height: 22px; left: 2px; top: 2px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: .2s; }
+.switch input:checked + span { background: var(--primary); }
+.switch input:checked + span:before { transform: translateX(20px); }
 </style>
 </head>
 <body>
@@ -1115,7 +1123,7 @@ async function renderBorehole(){
     const zk = window.CURRENT_HOLE;
     el.innerHTML = '<h1 class="page-title">钻孔复核 · ' + escHtml(zk) + '</h1><div style="padding:48px;text-align:center;color:var(--slate);">加载复核结果…</div>';
     try {
-      const r = await apiGet('/db/' + API_STATE.dbId + '/review/' + encodeURIComponent(zk));
+      const r = await apiGet(wsReviewHoleQuery(zk));
       let strata = { columns: [], rows: [] };
       try {
         strata = await apiGet('/db/' + API_STATE.dbId + '/table/z_g_TuCeng?keyword=' + encodeURIComponent(zk) + '&search_col=ZKBH&page_size=50');
@@ -1197,6 +1205,91 @@ async function renderBorehole(){
 /* ============ 数据工作台（数据管理 + 复核合并） ============ */
 let WS = { review: null, zkbh: '', table: 'z_g_TuCeng' };
 
+
+/* ============ 复核设置（与桌面端一致） ============ */
+let WS_SETTINGS = Object.assign(
+  { project_type: 'B', max_plasticity: '硬塑', include_test: false, use_std_stratum: false },
+  JSON.parse(localStorage.getItem('ws_settings') || '{}')
+);
+function wsSettingsHtml(){
+  const items = WS_SETTINGS.project_type === 'A'
+    ? ['流塑','软塑','可塑','硬塑','坚硬','不限制']
+    : ['流塑','软塑','硬塑','坚硬','不限制'];
+  return `
+    <div style="padding:20px 24px;">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;">复核设置</h3>
+      <div style="display:grid;gap:14px;">
+        <div>
+          <label style="font-size:12.5px;font-weight:600;color:var(--slate);">工程类型</label>
+          <select id="wsSetType" style="display:block;width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;margin-top:6px;" onchange="wsSetTypeChanged()">
+            <option value="B" ${WS_SETTINGS.project_type==='B'?'selected':''}>B 类 · 铁路（TB 体系）</option>
+            <option value="A" ${WS_SETTINGS.project_type==='A'?'selected':''}>A 类 · 工民建（GB 50021）</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12.5px;font-weight:600;color:var(--slate);">最大可塑状态（超过即判异常）</label>
+          <select id="wsSetPlastic" style="display:block;width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;margin-top:6px;">
+            ${items.map(x => '<option value="' + x + '"' + (WS_SETTINGS.max_plasticity===x?' selected':'') + '>' + x + '</option>').join('')}
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-soft);padding:12px 14px;border-radius:12px;">
+          <div><div style="font-size:13px;font-weight:600;">启用土工试验判别</div><div style="font-size:11.5px;color:var(--muted);">判别 R-PLS-001 / R-CRS-002/003（与桌面端一致）</div></div>
+          <label class="switch"><input type="checkbox" id="wsSetTest" ${WS_SETTINGS.include_test?'checked':''}><span></span></label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-soft);padding:12px 14px;border-radius:12px;">
+          <div><div style="font-size:13px;font-weight:600;">仅按标准地层判别</div><div style="font-size:11.5px;color:var(--muted);">启用标准地层对照（R-CRS-004）</div></div>
+          <label class="switch"><input type="checkbox" id="wsSetStd" ${WS_SETTINGS.use_std_stratum?'checked':''}><span></span></label>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="wsSaveSettings()">保存并重新复核</button>
+      </div>
+    </div>`;
+}
+function wsSetTypeChanged(){
+  const items = document.getElementById('wsSetType').value === 'A'
+    ? ['流塑','软塑','可塑','硬塑','坚硬','不限制'] : ['流塑','软塑','硬塑','坚硬','不限制'];
+  const p = document.getElementById('wsSetPlastic');
+  p.innerHTML = items.map(x => '<option value="' + x + '"' + (x==='硬塑'?' selected':'') + '>' + x + '</option>').join('');
+}
+function openModal(title, html){
+  const t = document.getElementById('modalTitle');
+  const b = document.getElementById('modalBody');
+  if (t) t.textContent = title;
+  if (b) b.innerHTML = html;
+  document.getElementById('modalMask').classList.add('show');
+}
+function closeModal(){
+  document.getElementById('modalMask').classList.remove('show');
+}
+function wsOpenSettings(){
+  openModal('复核设置', wsSettingsHtml());
+}
+function wsSaveSettings(){
+  WS_SETTINGS.project_type = document.getElementById('wsSetType').value;
+  WS_SETTINGS.max_plasticity = document.getElementById('wsSetPlastic').value;
+  WS_SETTINGS.include_test = document.getElementById('wsSetTest').checked;
+  WS_SETTINGS.use_std_stratum = document.getElementById('wsSetStd').checked;
+  localStorage.setItem('ws_settings', JSON.stringify(WS_SETTINGS));
+  closeModal();
+  showToast('设置已保存，重新复核中…', 'info');
+  renderWorkspace();
+}
+function wsReviewQuery(){
+  return '/db/' + API_STATE.dbId + '/review?project_type=' + WS_SETTINGS.project_type +
+    '&max_plasticity=' + encodeURIComponent(WS_SETTINGS.max_plasticity) +
+    '&use_std_stratum=' + WS_SETTINGS.use_std_stratum +
+    '&include_test=' + WS_SETTINGS.include_test;
+}
+function wsReviewHoleQuery(zk){
+  return '/db/' + API_STATE.dbId + '/review/' + encodeURIComponent(zk) +
+    '?project_type=' + WS_SETTINGS.project_type +
+    '&max_plasticity=' + encodeURIComponent(WS_SETTINGS.max_plasticity) +
+    '&use_std_stratum=' + WS_SETTINGS.use_std_stratum +
+    '&include_test=' + WS_SETTINGS.include_test;
+}
+
 async function renderWorkspace(){
   const el = document.getElementById('content');
   if (!API_STATE.online || !API_STATE.dbId) {
@@ -1221,6 +1314,7 @@ async function renderWorkspace(){
         <div class="ws-sub">在线库 db_id=${API_STATE.dbId} · 钻孔数据 · 复核问题 · 在线编辑，一处完成</div>
       </div>
       <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" onclick="wsOpenSettings()">⚙ 复核设置</button>
         <button class="btn btn-secondary" onclick="renderWorkspace()">重新复核</button>
         <button class="btn btn-secondary" onclick="location.hash='#mdb';route('workspace')">切换库</button>
       </div>
@@ -1237,6 +1331,7 @@ async function renderWorkspace(){
         <div id="wsHoles" style="max-height:calc(100vh - 320px);overflow-y:auto;"></div>
       </div>
       <div class="ws-panel">
+        <div id="wsTabs" style="display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--hairline);"></div>
         <div class="ws-toolbar">
           <select id="dataTableSel" style="height:34px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 10px;background:#fff;min-width:200px;font-size:13px;"></select>
           <div class="search-in" style="flex:1;max-width:260px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
@@ -1279,7 +1374,7 @@ async function wsUpload(file){
 
 async function wsLoadReview(){
   try {
-    const data = await apiPost('/db/' + API_STATE.dbId + '/review', {});
+    const data = await apiPost(wsReviewQuery(), {});
     WS.review = data;
     const s = data.summary || {};
     const holes = document.getElementById('wsS0'), risk = document.getElementById('wsS1'),
@@ -1338,31 +1433,62 @@ async function wsSelectHole(zk){
   } catch (e) {
     if (box) box.innerHTML = '<div style="padding:20px;color:var(--error);font-size:13px;">加载失败：' + escHtml((e && e.message) || e) + '</div>';
   }
-  // 中栏切到地层表并搜索该孔
+  // 中栏切到地层页签并搜索该孔
   if (!API_STATE.tables) await wsInitTables();
-  const names = Object.keys(API_STATE.tables || {});
-  const strataTbl = names.find(n => /TuCeng|Strata|DiCeng/i.test(n)) || names[0];
-  const sel = document.getElementById('dataTableSel');
-  if (sel && names.includes(strataTbl)) { sel.value = strataTbl; OData.table = strataTbl; }
+  wsSetTab('z_g_TuCeng');
   const si = document.getElementById('onlineSearch');
   if (si) { si.value = zk; OData.keyword = zk; OData.searchCol = 'ZKBH'; OData.page = 1; }
   await loadOnlinePage(1);
 }
 
+let WS_TABS_DONE = false;
 async function wsInitTables(){
-  if (API_STATE.tables) return;
-  try {
-    const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables');
-    API_STATE.tables = {};
-    (r.tables || []).forEach(t => API_STATE.tables[t] = null);
-    saveApiState();
-  } catch (e) { return; }
+  if (!API_STATE.tables) {
+    try {
+      const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables');
+      API_STATE.tables = {};
+      (r.tables || []).forEach(t => API_STATE.tables[t] = null);
+      saveApiState();
+    } catch (e) { return; }
+  }
   const sel = document.getElementById('dataTableSel');
-  if (!sel) return;
   const names = Object.keys(API_STATE.tables);
+  if (!names.length) return;
   if (!OData.table || !names.includes(OData.table)) OData.table = names[0];
-  sel.innerHTML = names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('');
-  sel.addEventListener('change', e => { OData.table = e.target.value; OData.page = 1; OData.keyword = ''; const si = document.getElementById('onlineSearch'); if (si) si.value = ''; loadOnlinePage(1); });
+  if (sel) {
+    sel.innerHTML = names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('');
+    if (!WS_TABS_DONE) {
+      WS_TABS_DONE = true;
+      sel.addEventListener('change', e => { OData.table = e.target.value; OData.page = 1; OData.keyword = ''; const si = document.getElementById('onlineSearch'); if (si) si.value = ''; wsMarkTab(); loadOnlinePage(1); });
+    }
+  }
+  // 页签：地层/土工试验/动探/标贯/水位（表存在才显示）
+  const tabs = document.getElementById('wsTabs');
+  if (tabs) {
+    const defs = [['z_g_TuCeng','地层'],['z_c_QuYang','土工试验'],['z_y_DongTan','动探'],['z_y_BiaoGuan','标贯'],['z_g_ShuiWei','水位']];
+    tabs.innerHTML = defs.filter(d => names.includes(d[0])).map(d =>
+      '<div data-t="' + d[0] + '" onclick="wsSetTab(\'' + d[0] + '\')" style="padding:7px 14px;font-size:12.5px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:var(--steel);border-bottom:2px solid transparent;">' + d[1] + '</div>').join('');
+    wsMarkTab();
+  }
+}
+function wsMarkTab(){
+  const tabs = document.getElementById('wsTabs');
+  if (!tabs) return;
+  tabs.querySelectorAll('[data-t]').forEach(el => {
+    const on = el.dataset.t === OData.table;
+    el.style.color = on ? 'var(--primary)' : 'var(--steel)';
+    el.style.borderBottomColor = on ? 'var(--primary)' : 'transparent';
+    el.style.background = on ? 'var(--surface-soft)' : 'transparent';
+  });
+}
+function wsSetTab(tbl){
+  OData.table = tbl; OData.page = 1; OData.keyword = ''; OData.searchCol = '';
+  const sel = document.getElementById('dataTableSel');
+  if (sel) sel.value = tbl;
+  const si = document.getElementById('onlineSearch');
+  if (si) { si.value = ''; }
+  wsMarkTab();
+  loadOnlinePage(1);
 }
 
 /* ============ 修正与成果（批量修正 + 统计 + DXF） ============ */

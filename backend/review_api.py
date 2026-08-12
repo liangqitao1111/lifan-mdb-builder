@@ -42,12 +42,12 @@ def _issue_to_dict(i):
             "field": getattr(i, "field", ""), "message": i.message}
 
 
-def _review_all(db_path, project_type, max_plasticity, use_std_stratum):
+def _review_all(db_path, project_type, max_plasticity, use_std_stratum, include_test=True):
     da = _get_da(db_path)
     engine = _get_engine(db_path, project_type, max_plasticity, use_std_stratum)
     bhs = da.get_all_boreholes()
     sa = da.get_all_strata(); sp = da.get_all_spt()
-    dp = da.get_all_dpt(); tt = da.get_all_test()
+    dp = da.get_all_dpt(); tt = da.get_all_test() if include_test else {}
     issues_by_hole = {}
     summary = {"holes": 0, "h": 0, "m": 0, "total": 0}
     for b in bhs:
@@ -79,17 +79,19 @@ def _resolve_db_path(db_id):
 
 @router.post("/review")
 def review_db(db_id: str, project_type: str = "B",
-              max_plasticity: str = "硬塑", use_std_stratum: bool = False):
+              max_plasticity: str = "硬塑", use_std_stratum: bool = False,
+              include_test: bool = True):
     path = _resolve_db_path(db_id)
     try:
-        return _review_all(path, project_type, max_plasticity, use_std_stratum)
+        return _review_all(path, project_type, max_plasticity, use_std_stratum, include_test)
     except Exception as e:
         raise HTTPException(500, f"复核失败: {e}")
 
 
 @router.get("/review/{zkbh}")
 def review_hole(db_id: str, zkbh: str, project_type: str = "B",
-                max_plasticity: str = "硬塑", use_std_stratum: bool = False):
+                max_plasticity: str = "硬塑", use_std_stratum: bool = False,
+                include_test: bool = True):
     path = _resolve_db_path(db_id)
     da = _get_da(path)
     engine = _get_engine(path, project_type, max_plasticity, use_std_stratum)
@@ -97,7 +99,7 @@ def review_hole(db_id: str, zkbh: str, project_type: str = "B",
         strata = da.get_strata(None, zkbh) if hasattr(da, "get_strata") else []
         spt = da.get_spt_data(zkbh) if hasattr(da, "get_spt_data") else []
         dpt = da.get_dpt_data(zkbh) if hasattr(da, "get_dpt_data") else []
-        test = da.get_test_data(zkbh) if hasattr(da, "get_test_data") else []
+        test = da.get_test_data(zkbh) if hasattr(da, "get_test_data") and include_test else []
         if not strata and not spt and not dpt:
             raise HTTPException(404, f"钻孔 {zkbh} 无数据")
         issues = engine.review_strata(strata, spt, dpt, test)
