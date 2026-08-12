@@ -327,6 +327,26 @@ GitHub Actions · windows-latest（免费临时 Windows 虚拟机）
 - `backend/verify_mdb.py` — 回读校验脚本（行数一致才算成功，防止静默丢数）
 
 > 注意：仓库建议用**私有**（转换脚本可公开，但 artifact 里含项目数据）；触发需 GitHub PAT token；`repository_dispatch` 的 workflow 已写好，网页后端只需 `curl -X POST https://api.github.com/repos/你的账号/仓库/dispatches` 带 `{event_type:"build-mdb"}` 即可。
+>
+> **⭐ P0 网页触发一键闭环（2026-08-12 实现并实测）**：直接用现成 Python 脚本 `backend/github_trigger.py`，**一行命令完成"网页按钮按下 → GitHub API 触发 → 轮询状态 → 下载产物"全流程**，不依赖网页后端实现：
+>
+> ```bash
+> # 完整闭环：触发 + 轮询到完成 + 自动下载到 output/
+> python backend/github_trigger.py --token "$(gh auth token)"
+>
+> # 只查看最近一次 run 状态
+> python backend/github_trigger.py --token "$(gh auth token)" --status
+>
+> # 只下载最近一次成功产物
+> python backend/github_trigger.py --token "$(gh auth token)" --download output/
+>
+> # 网页后端集成：触发后用 run_id 异步轮询 + 返回下载链接
+> python backend/github_trigger.py --token <PAT> --poll <run_id>
+> ```
+>
+> 脚本亮点：**仅 Python 标准库**（urllib / zipfile）、UTF-8 输出、Windows 兼容、OAuth token 自动 fallback 到 `gh run download`、容错友好提示。
+>
+> 网页集成路径：把这 4 个命令包成 4 个后端 API（或一个 FastAPI 端点），前端轮询状态显示即可。
 
 ### 5.2 实测踩坑记录（2026-08-12 真实验证）
 
