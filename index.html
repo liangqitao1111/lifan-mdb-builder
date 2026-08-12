@@ -1524,6 +1524,11 @@ async function renderTools(){
         <div class="d">SPT 杆长/击数修正建议扫描（只读，建议值可在工作台编辑应用）</div>
         <span class="a">查看建议 →</span>
       </div>
+      <div class="card" onclick="toolsIssues()">
+        <div class="t">导出复核问题清单</div>
+        <div class="d">全库复核问题导出为 xlsx（规则/级别/位置/说明）</div>
+        <span class="a">导出清单 →</span>
+      </div>
       <div class="card" onclick="runStats('soil')">
         <div class="t">土工统计</div>
         <div class="d">按地层分组的土工试验统计表（xlsx 下载）</div>
@@ -1553,21 +1558,54 @@ async function renderTools(){
     <div id="toolsResult" style="margin-top:16px;"></div>`;
 }
 
+async function toolsIssues(){
+  const box = document.getElementById('toolsResult');
+  if (!box) return;
+  box.innerHTML = '<div style="padding:24px;color:var(--steel);">正在导出复核问题清单…</div>';
+  try {
+    const r = await apiPost('/db/' + API_STATE.dbId + '/issues-export', { include_test: false });
+    box.innerHTML = '<div style="padding:16px 20px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b> <a href="' + escAttr(r.download || '') + '" download style="color:var(--primary);font-weight:600;margin-left:10px;">下载</a></div>';
+  } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">导出失败：' + escHtml((e && e.message) || e) + '</div>'; }
+}
+
 async function toolsSpt(){
   const box = document.getElementById('toolsResult');
   if (!box) return;
   box.innerHTML = '<div style="padding:24px;color:var(--steel);">扫描修正建议…</div>';
   try {
     const data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {});
-    const sg = data.suggestions || [];
+    // 展平：外层组 → 内层 SptSuggestion 列表
+    const flat = [];
+    (data.suggestions || []).forEach(g => {
+      (g.suggestions || []).forEach(s => {
+        if (s && s.zkbh && s.new_n !== undefined && s.old_n !== undefined) {
+          flat.push({ zkbh: s.zkbh, layer: s.layer_label || '', bgdsd: s.bgdsd,
+                      old_n: s.old_n, new_n: s.new_n, ref: s.ref_source || s.issue_type || '' });
+        }
+      });
+    });
     box.innerHTML = `
       <div class="ws-panel">
-        <div class="p-head">标贯修正建议 · ${sg.length} 条</div>
+        <div class="p-head">标贯修正建议 · ${flat.length} 条
+          ${flat.length ? '<button class="btn btn-primary" style="padding:4px 14px;height:30px;font-size:12px;" onclick="toolsSptApply()">一键应用全部</button>' : ''}
+        </div>
         <div style="max-height:420px;overflow-y:auto;">
-          ${sg.map(s => '<div class="ws-issue"><div><b style="color:var(--primary);">' + escHtml(s.zkbh || s.hole || '') + '</b> · ' + escHtml(s.old_value || s.original || '') + ' → <b>' + escHtml(s.new_value || s.suggested || '') + '</b></div><div class="fld">' + escHtml((s.reason || s.message || '') + ' ' + (s.rule_id || '')) + '</div></div>').join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
+          ${flat.map(s => '<div class="ws-issue" data-zk="' + escAttr(s.zkbh) + '" data-dsd="' + s.bgdsd + '" data-n="' + s.new_n + '"><div><b style="color:var(--primary);">' + escHtml(s.zkbh) + '</b> · 深度 ' + s.bgdsd + 'm · ' + escHtml(s.old_n) + ' → <b>' + escHtml(s.new_n) + '</b></div><div class="fld">' + escHtml(s.ref) + '</div></div>').join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
         </div>
       </div>`;
   } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">扫描失败：' + escHtml((e && e.message) || e) + '</div>'; }
+}
+async function toolsSptApply(){
+  const items = Array.from(document.querySelectorAll('#toolsResult [data-zk]')).map(el => ({
+    zkbh: el.dataset.zk, bgdsd: parseFloat(el.dataset.dsd), new_n: parseFloat(el.dataset.n)
+  }));
+  if (!items.length) return;
+  if (!confirm('确认将 ' + items.length + ' 条标贯修正值写回工作库？')) return;
+  try {
+    const r = await apiPost('/db/' + API_STATE.dbId + '/spt-apply', { items });
+    showToast('已应用 ' + (r.updated || 0) + ' / ' + items.length + ' 条', r.updated ? 'info' : 'err');
+    toolsSpt();
+  } catch (e) { showToast('应用失败：' + ((e && e.message) || e), 'err'); }
 }
 
 async function toolsDxf(kind){

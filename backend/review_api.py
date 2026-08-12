@@ -118,12 +118,21 @@ def spt_scan(db_id: str, project_type: str = "B",
     da = _get_da(path)
     engine = _get_engine(path, project_type, max_plasticity, use_std_stratum)
     try:
+        import dataclasses
         from review.spt_corrector import SptCorrector
         corr = SptCorrector(da, engine)
         suggestions = corr.scan_all()
-        return {"total": len(suggestions),
-                "suggestions": [s.__dict__ if hasattr(s, "__dict__") else str(s)
-                                for s in suggestions]}
+
+        def _ser(x):
+            if dataclasses.is_dataclass(x) and not isinstance(x, type):
+                return {k: _ser(v) for k, v in dataclasses.asdict(x).items()}
+            if isinstance(x, dict):
+                return {k: _ser(v) for k, v in x.items()}
+            if isinstance(x, (list, tuple)):
+                return [_ser(v) for v in x]
+            return x
+
+        return {"total": len(suggestions), "suggestions": [_ser(s) for s in suggestions]}
     except Exception as e:
         raise HTTPException(500, f"标贯扫描失败: {e}")
 

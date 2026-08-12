@@ -44,6 +44,7 @@ except Exception:
 
 import db as wdb
 import review_api
+import feature_api
 import auth
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +64,7 @@ app.add_middleware(
 
 # 复核/修正/统计 API（复用桌面版规则引擎）
 app.include_router(review_api.router)
+app.include_router(feature_api.router)
 
 # ---------- 登录 ----------
 from pydantic import BaseModel as _BM
