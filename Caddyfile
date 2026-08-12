@@ -1,0 +1,10 @@
+# Caddy 反代模板（HTTPS）
+# 用法：将域名/公网 IP 填入下方，与 docker-compose.yml 同目录运行：
+#   caddy run
+lifan.example.com {
+    reverse_proxy 127.0.0.1:8000
+}
+# 内网 IP 场景（无域名，自签证书）：
+# http://192.168.1.100 {
+#     reverse_proxy 127.0.0.1:8000
+# }

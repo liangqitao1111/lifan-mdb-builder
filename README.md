@@ -551,3 +551,43 @@ FastAPI (backend/main.py + review_api.py)
   ├─ 参数中心：参数/工程配置.toml（与桌面版同口径）
   └─ MDB 重建：github_trigger.py → GitHub Actions (lifan-mdb-builder) → artifact 缓存
 ```
+
+
+### 7.6 部署运维
+
+#### 一键启动
+
+| 平台 | 命令 |
+|---|---|
+| Windows | 双击 `start.bat`（自动装依赖并启动 :8000） |
+| Linux/macOS | `bash start.sh`（自动装 mdbtools + 依赖） |
+| Docker | `docker compose up -d`（含数据卷持久化，GH_TOKEN/凭据走 `.env`） |
+
+`.env` 示例：
+```bash
+GH_TOKEN=github_pat_xxx      # 触发 MDB 构建（GitHub Actions 读写权限）
+ADMIN_USER=admin
+ADMIN_PASS=你的强密码
+AUTH_SECRET=随机长字符串       # 鉴权签名密钥
+```
+
+#### HTTPS / 公网访问
+
+- 有域名：Caddy（`Caddyfile` 模板）自动签发 HTTPS
+- 无公网 IP：Tailscale（免费）组网，内网/出差均可用 `http://<tailscale-ip>:8000`
+- 敏感数据：建议仅内网部署 + 登录鉴权（默认 admin/admin，生产必改）
+
+#### 鉴权与审计
+
+- 全部 `/api/*`（除登录/健康检查）需 `Authorization: Bearer <token>`，登录接口 `POST /api/login` 签发（12h 有效）
+- 操作审计：`work/logs/audit.jsonl`（时间/用户/方法/路径/状态）
+
+#### 目录职责
+
+```
+work/dbs/        上传解析的 SQLite 工作库 + schema
+work/uploads/    上传的 .mdb/.lz 原件
+work/artifacts/  GitHub Actions 构建产物缓存（{db_id}.lz）
+work/reports/    统计/问题清单产物
+work/logs/       审计日志
+参数/            工程配置.toml（参数中心在线编辑，保留注释）

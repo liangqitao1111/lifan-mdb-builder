@@ -1,0 +1,21 @@
+services:
+  lifan-web:
+    build: .
+    container_name: lifan-web
+    ports:
+      - "8000:8000"
+    environment:
+      # 触发 GitHub Actions 构建 MDB 的 token（必填，否则构建按钮报错）
+      - GH_TOKEN=${GH_TOKEN:-}
+      # 登录凭据（默认 admin/admin，生产务必修改）
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-admin}
+      # 鉴权签名密钥（生产务必设置随机值）
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
+    volumes:
+      # 上传库/工作库/产物持久化
+      - lifan_work:/app/work
+    restart: unless-stopped
+
+volumes:
+  lifan_work:
