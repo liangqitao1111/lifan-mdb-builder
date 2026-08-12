@@ -117,3 +117,22 @@
 - 所有 GitHub 交互 token 只存在于服务端环境变量 GH_TOKEN；前端不接触。
 - artifact 按 db_id 隔离；未构建成功不提供下载。
 - 上传/产物文件命名均用 uuid db_id，避免路径穿越。
+
+## 8. 复核/统计 API（功能还原，复用桌面版规则引擎）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | /api/db/{db_id}/review | 全库复核：{summary:{holes,h,m,total}, by_hole:{zkbh:{h,m,issues[]}}}；参数 project_type/max_plasticity/use_std_stratum |
+| GET | /api/db/{db_id}/review/{zkbh} | 单孔复核：{zkbh, issues[]}（issue: rule_id/level/field/message） |
+| POST | /api/db/{db_id}/spt-scan | 标贯批量修正建议扫描（只读） |
+| POST | /api/db/{db_id}/stats/karst?project_type=A\|B | 岩溶统计（附表7/8），产物 xlsx |
+| POST | /api/db/{db_id}/stats/soil?project_type=A\|B | 土工统计（按地层分组），产物 xlsx |
+| GET | /api/db/{db_id}/stats/download?file= | 下载统计产物 |
+
+- 规则引擎 = 桌面版 rule_engine.py 原样复用（backend/review/），SQLite 工作库经 sqlite_dao 兼容层（TOP→LIMIT、AttrRow）读取，**复核结果与桌面版逐孔 IDENTICAL**（真实库 408 孔/147 问题验证）。
+- 业务模块（rule_engine/dao/config/spt_corrector/soil_stats/karst_report 等）从桌面版复制并适配路径（参数目录指向 lifan_web/参数/）。
+- 自动化回归：`python -m pytest tests/e2e_api.py -v`（11 项，含一致性验证）。
+
+## 9. 写入闭环（100% 落库验证）
+
+Web 编辑 → SQLite → trigger_build（Contents 上传 payload/ → dispatch → 轮询 → artifact 缓存 work/artifacts/{db_id}.lz）→ 下载。验证：真实库修改 2 处（密实度/标贯击数）→ Actions 构建 → verify 85 表/11356 行全量一致 + 修改点落库 PASS + 桌面版可打开。

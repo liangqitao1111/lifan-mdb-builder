@@ -1035,7 +1035,8 @@ async function renderReview(){
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
           <div class="stat-card" style="background:var(--tint-lavender);cursor:pointer;" onclick="route('borehole')"><div class="val" style="font-size:16px;">钻孔复核</div><div class="sub">22+ 条规则引擎</div></div>
           <div class="stat-card" style="background:var(--tint-sky);cursor:pointer;" onclick="route('spt')"><div class="val" style="font-size:16px;">批量修正标贯</div><div class="sub">SPT 杆长/击数</div></div>
-          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="showToast('统计成果 - 即将开放','err')"><div class="val" style="font-size:16px;">统计成果</div><div class="sub">承载力 · 岩溶 · 土工</div></div>
+          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="runStats('soil')"><div class="val" style="font-size:16px;">土工统计</div><div class="sub">按地层分组 xlsx</div></div>
+          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="runStats('karst_b')"><div class="val" style="font-size:16px;">岩溶统计</div><div class="sub">附表7/8 · B 类</div></div>
           <div class="stat-card" style="background:var(--tint-peach);cursor:pointer;" onclick="route('build')"><div class="val" style="font-size:16px;">生成 MDB</div><div class="sub">GitHub Actions 回写</div></div>
         </div>
       </div>`;
@@ -1155,6 +1156,27 @@ async function renderBorehole(){
     </div>
   `;
 }
+async function runStats(kind){
+  if (!API_STATE.online || !API_STATE.dbId) { showToast('请先上传数据库（在线模式）', 'err'); return; }
+  const api = kind === 'karst_b' ? '/db/' + API_STATE.dbId + '/stats/karst?project_type=B'
+           : kind === 'karst_a' ? '/db/' + API_STATE.dbId + '/stats/karst?project_type=A'
+           : '/db/' + API_STATE.dbId + '/stats/soil?project_type=A';
+  const label = kind === 'karst_b' ? '岩溶统计（B 类）' : kind === 'karst_a' ? '岩溶统计（A 类）' : '土工统计';
+  showToast('正在生成' + label + '…', 'info');
+  try {
+    const r = await apiPost(api, {});
+    const files = r.files || (r.file ? [r.file] : []);
+    if (!files.length) { showToast('未生成文件', 'err'); return; }
+    showToast('已生成 ' + files.length + ' 个文件', 'info');
+    const el = document.getElementById('content');
+    el.insertAdjacentHTML('beforeend', `
+      <div class="users-list" style="margin-top:12px;">
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">${label} · 下载</h3>
+        ${files.map(f => '<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;"><span>' + escHtml(f) + '</span><a class="btn btn-secondary" style="padding:4px 14px;text-decoration:none;color:var(--primary);border-color:var(--primary);" href="/api/db/' + API_STATE.dbId + '/stats/download?file=' + encodeURIComponent(f) + '" download>下载</a></div>').join('')}
+      </div>`);
+  } catch (e) { showToast('生成失败：' + (e && e.message || e), 'err'); }
+}
+
 async function renderSpt(){
   const el = document.getElementById('content');
   if (API_STATE.online && API_STATE.dbId) {
