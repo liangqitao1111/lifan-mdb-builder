@@ -155,3 +155,38 @@ def test_desktop_consistency():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v", "-s"]))
+
+
+def test_dxf_profile(db_id):
+    """纵断面 DXF 生成 + 下载"""
+    r = client.post(f"/api/db/{db_id}/dxf/profile?holes=26-ZD-GZXT-0-1,26-ZD-GZXT-0-2&h_scale=500&v_scale=500", json={})
+    if r.status_code == 400:
+        pytest.skip("钻孔编号不适用于该库")
+    assert r.status_code == 200, r.text[:300]
+    j = r.json()
+    assert j.get("file", "").endswith(".dxf")
+    d = client.get(f"/api/db/{db_id}/dxf/download?file={j['file']}")
+    assert d.status_code == 200
+    assert d.content[:6] in (b"0\nSEC", b"0\r\nSEC", b"0\nSECT") or len(d.content) > 1000
+
+
+def test_dxf_columns(db_id):
+    r = client.post(f"/api/db/{db_id}/dxf/columns", json={})
+    assert r.status_code == 200, r.text[:300]
+    assert r.json().get("file", "").endswith(".dxf")
+
+
+def test_config_get_put(db_id):
+    """参数中心：读取 TOML → 原样保存（备份 + 校验）"""
+    g = client.get(f"/api/db/{db_id}/config")
+    assert g.status_code == 200
+    raw = g.json()["raw_text"]
+    assert len(raw) > 500
+    assert "公用" in raw
+    # 非法 TOML 拒绝
+    bad = client.put(f"/api/db/{db_id}/config", json={"raw_text": "not = = valid toml"})
+    assert bad.status_code == 422, "非法 TOML 应拒绝"
+    # 原样回写
+    good = client.put(f"/api/db/{db_id}/config", json={"raw_text": raw})
+    assert good.status_code == 200, good.text[:200]
+    assert good.json()["ok"]

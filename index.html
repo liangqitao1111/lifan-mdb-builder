@@ -299,6 +299,7 @@ a:hover { text-decoration: underline; }
     <a class="nav-item" data-route="borehole"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5L19.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>钻孔复核</a>
     <a class="nav-item" data-route="spt"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 3v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>批量修正</a>
     <a class="nav-item" data-route="build"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0l4-4m-4 4l-4-4M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>生成 MDB</a>
+      <a class="nav-item" data-route="config"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span>参数中心</span></a>
     <div class="sb-section" style="margin-top:auto;">账户</div>
     <a class="nav-item" id="logoutBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>退出登录</a>
   </aside>
@@ -572,13 +573,13 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 /* ============================================================
    路由
    ============================================================ */
-const ROUTES = ['mdb','data','hub','borehole','spt','build'];
+const ROUTES = ['mdb','data','hub','borehole','spt','build','config'];
 window.CURRENT_HOLE = '';
 function route(name){
   if (!ROUTES.includes(name)) name = 'mdb';
   location.hash = '#' + name;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.route === name));
-  document.getElementById('crumb').textContent = {mdb:'数据库接入', data:'数据管理', hub:'复核工作台', borehole:'钻孔复核', spt:'批量修正', build:'生成 MDB'}[name];
+  document.getElementById('crumb').textContent = {mdb:'数据库接入', data:'数据管理', hub:'复核工作台', borehole:'钻孔复核', spt:'批量修正', build:'生成 MDB', config:'参数中心'}[name];
   render(name);
 }
 window.addEventListener('hashchange', () => route(location.hash.replace('#','')));
@@ -997,6 +998,7 @@ function render(name){
   if (name === 'hub') return renderReview();
   if (name === 'borehole') return renderBorehole();
   if (name === 'spt') return renderSpt();
+    if (name === 'config') return renderConfig();
   if (name === 'build') return renderBuild();
 }
 async function renderReview(){
@@ -1156,6 +1158,42 @@ async function renderBorehole(){
     </div>
   `;
 }
+async function renderConfig(){
+  const el = document.getElementById('content');
+  if (!API_STATE.online || !API_STATE.dbId) {
+    el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--slate);">请先上传数据库（在线模式）后查看/编辑工程配置。</div>';
+    return;
+  }
+  el.innerHTML = '<h1 class="page-title">参数中心</h1><p class="page-sub">加载工程配置.toml…</p><div style="padding:40px;text-align:center;color:var(--slate);">读取中…</div>';
+  try {
+    const g = await apiGet('/db/' + API_STATE.dbId + '/config', { timeout: 30000 });
+    const ov = Object.keys(g.overview || {}).map(k => '<span style="background:var(--tint-sky);padding:2px 10px;border-radius:10px;font-size:12px;margin-right:6px;">' + escHtml(k) + ':' + escHtml(g.overview[k]) + '</span>').join('');
+    el.innerHTML = `
+      <h1 class="page-title">参数中心</h1>
+      <p class="page-sub">工程配置.toml · ${g.size} 字节 · 保存前自动备份 .bak</p>
+      <div style="margin-bottom:10px;">${ov || ''}</div>
+      <textarea id="cfgText" spellcheck="false" style="width:100%;height:55vh;font-family:Consolas,monospace;font-size:12px;border:1px solid var(--border);border-radius:8px;padding:12px;box-sizing:border-box;background:var(--card);color:var(--slate);white-space:pre;">${escHtml(g.raw_text)}</textarea>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+        <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+        <button class="btn btn-secondary" onclick="route('config')">重新加载</button>
+        <span id="cfgStatus" style="font-size:12px;color:var(--slate);"></span>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">读取失败：' + escHtml((e && e.message) || e) + '</div>';
+  }
+}
+async function saveConfig(){
+  const raw = document.getElementById('cfgText').value;
+  const st = document.getElementById('cfgStatus');
+  st.textContent = '保存中…'; st.style.color = 'var(--slate)';
+  try {
+    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { raw_text: raw });
+    st.textContent = '✓ 已保存（' + r.size + ' 字节，备份 ' + r.backup + '）'; st.style.color = 'var(--success)';
+  } catch (e) {
+    st.textContent = '✗ 保存失败：' + ((e && e.message) || e); st.style.color = 'var(--error)';
+  }
+}
+
 async function runStats(kind){
   if (!API_STATE.online || !API_STATE.dbId) { showToast('请先上传数据库（在线模式）', 'err'); return; }
   const api = kind === 'karst_b' ? '/db/' + API_STATE.dbId + '/stats/karst?project_type=B'

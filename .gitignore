@@ -11,3 +11,6 @@ Thumbs.db
 
 # 运行时日志
 lizheng_review.log
+
+# 配置备份
+*.bak

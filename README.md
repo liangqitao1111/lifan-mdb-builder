@@ -501,3 +501,53 @@ FastAPI 后端（免费 Linux VPS）
 
 - Linux 上 mdbtools **只读** .mdb（写回仍走 GitHub Actions Windows 节点，与方案结论一致）
 - 上传文件建议 ≤200 MB；大批量表导入为串行，可后续加分批
+
+---
+
+## 7. Web 部署与使用（V3.0.4 网页化）
+
+### 7.1 本地启动（开发/内网）
+
+```bash
+cd backend
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+浏览器打开 `http://<服务器IP>:8000/`（FastAPI 已托管前端，同源部署，单端口即用）。
+本地无 ACE 驱动时后端自动降级 mdbtools（Linux：`apt install mdbtools`）。
+
+### 7.2 环境变量
+
+| 变量 | 必填 | 说明 |
+|---|---|---|
+| `GH_TOKEN` | 触发 MDB 构建时需要 | GitHub PAT（仓库 `lifan-mdb-builder` 的 Actions: Read/Write 权限）；不配置时前端构建按钮给出清晰错误 |
+
+### 7.3 使用流程（Web 全闭环）
+
+1. **数据库接入**：上传 `.mdb` / `.lz`（ZIP 包自动解压取内嵌 MDB）→ 后端解析为 SQLite 工作库（类型保真 schema v2）
+2. **复核工作台**：全库复核（22+ 条规则，与桌面版 V3.0.4 **逐孔 IDENTICAL**）→ 点击问题钻孔看单孔明细
+3. **批量修正**：标贯杆长/击数修正建议（只读扫描）
+4. **统计成果**：岩溶统计（A/B 附表7/8）、土工统计（按地层分组）→ xlsx 下载
+5. **成果导出**：纵断面 DXF、综合小柱状图 DXF → 下载
+6. **参数中心**：工程配置.toml 在线查看/编辑（TOML 语法校验 + 自动备份 .bak）
+7. **生成 MDB**：触发 GitHub Actions（免费 Windows VM + ACE 驱动）重建真 `.lz` → 轮询 → 下载产物（100% 落库：verify 全量校验 + 修改点确认 + 桌面版可打开）
+
+### 7.4 自动化回归
+
+```bash
+python -m pytest tests/e2e_api.py -v   # 14 项：上传/复核/统计/DXF/参数/CRUD/一致性
+```
+
+### 7.5 架构
+
+```
+浏览器 (index.html SPA)
+  │  /api/*（同源）
+  ▼
+FastAPI (backend/main.py + review_api.py)
+  ├─ SQLite 工作库 (work/dbs/{db_id}.db) ← 上传 .mdb/.lz 解析（ACE/mdbtools）
+  ├─ 复核/统计/DXF：复用桌面版业务层 (backend/review/：rule_engine/dao/config/统计模块)
+  ├─ 参数中心：参数/工程配置.toml（与桌面版同口径）
+  └─ MDB 重建：github_trigger.py → GitHub Actions (lifan-mdb-builder) → artifact 缓存
+```

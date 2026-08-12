@@ -206,3 +206,127 @@ def stats_download(db_id: str, file: str):
     if not os.path.exists(path):
         raise HTTPException(404, f"产物不存在: {file}")
     return FileResponse(path, filename=file)
+
+
+# =====================================================================
+# DXF 导出 API（复用桌面版 profile_dxf / column_dxf，ezdxf 纯 Python）
+# =====================================================================
+def _dxf_dir(db_id):
+    base = os.path.dirname(os.path.abspath(__file__))
+    d = os.path.join(base, "..", "work", "dxf", db_id)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+@router.post("/dxf/profile")
+def dxf_profile(db_id: str, holes: str = "", h_scale: int = 500, v_scale: int = 500,
+                group_interval: int = 3, draw_cave: bool = True,
+                draw_label: bool = True, draw_label_text: bool = True):
+    """纵断面 DXF：holes 为逗号分隔钻孔编号（≥2），按里程排序"""
+    path = _resolve_db_path(db_id)
+    da = _get_da(path)
+    zkbh_list = [z.strip() for z in (holes or "").split(",") if z.strip()]
+    if len(zkbh_list) < 2:
+        raise HTTPException(400, "至少输入 2 个钻孔编号（逗号分隔）")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    block_tpl = os.path.join(root, "地层标注", "块.dxf")
+    out = os.path.join(_dxf_dir(db_id), f"profile_{db_id}.dxf")
+    try:
+        from review.profile_dxf import generate_profile
+        out_path, hole_count, placed, skipped = generate_profile(
+            da, zkbh_list, out, group_interval, block_tpl,
+            draw_cave, draw_label, draw_label_text, h_scale, v_scale)
+        return {"ok": True, "file": os.path.basename(out_path), "holes": hole_count,
+                "placed": placed, "skipped": skipped,
+                "download": f"/api/db/{db_id}/dxf/download?file=" + os.path.basename(out_path)}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"纵断面生成失败: {e}")
+
+
+@router.post("/dxf/columns")
+def dxf_columns(db_id: str, interval: int = 500, col_h: int = 15, col_w: int = 10):
+    """综合小柱状图 DXF（全部钻孔）"""
+    path = _resolve_db_path(db_id)
+    da = _get_da(path)
+    out = os.path.join(_dxf_dir(db_id), f"columns_{db_id}.dxf")
+    try:
+        from review.column_dxf import generate_columns
+        placed, msg = generate_columns(da, out, interval, col_h, col_w)
+        return {"ok": True, "file": os.path.basename(out), "placed": placed, "msg": msg,
+                "download": f"/api/db/{db_id}/dxf/download?file=" + os.path.basename(out)}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"柱状图生成失败: {e}")
+
+
+@router.get("/dxf/download")
+def dxf_download(db_id: str, file: str):
+    if not file or ".." in file or "/" in file or "\\" in file:
+        raise HTTPException(400, "非法文件名")
+    base = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(base, "..", "work", "dxf", db_id, file)
+    if not os.path.exists(path):
+        raise HTTPException(404, f"产物不存在: {file}")
+    return FileResponse(path, filename=file)
+
+
+# =====================================================================
+# 参数中心 API（工程配置.toml 查看/编辑/保存）
+# =====================================================================
+def _config_path():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "参数", "工程配置.toml")
+
+
+@router.get("/config")
+def get_config(db_id: str):
+    """读取工程配置.toml：返回原始文本 + 结构概览（段落/键数）"""
+    p = _config_path()
+    if not os.path.exists(p):
+        raise HTTPException(404, f"配置文件不存在: {p}")
+    raw = io_open(p, "utf-8").read()
+    try:
+        import tomllib
+        data = tomllib.loads(raw)
+        overview = {k: (len(v) if isinstance(v, dict) else type(v).__name__) for k, v in data.items()}
+    except Exception as e:
+        overview = {"解析失败": str(e)}
+    return {"path": p, "size": len(raw), "raw_text": raw, "overview": overview}
+
+
+@router.put("/config")
+def put_config(db_id: str, payload: dict):
+    """保存工程配置.toml：先 tomllib 校验语法，非法拒绝写入"""
+    raw = (payload or {}).get("raw_text")
+    if not raw or not isinstance(raw, str):
+        raise HTTPException(400, "缺少 raw_text")
+    try:
+        import tomllib
+        tomllib.loads(raw)
+    except Exception as e:
+        raise HTTPException(422, f"TOML 语法错误，拒绝保存: {e}")
+    p = _config_path()
+    # 备份后写入（保留旧版可回滚）
+    try:
+        if os.path.exists(p):
+            bak = p + ".bak"
+            with open(p, "r", encoding="utf-8") as f, open(bak, "w", encoding="utf-8") as g:
+                g.write(f.read())
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(raw)
+        # 清空 config 缓存，使下次复核使用新参数
+        try:
+            import review.config as rcfg
+            rcfg._PROJECT_CONFIG = None
+        except Exception:
+            pass
+        return {"ok": True, "size": len(raw), "backup": os.path.basename(p) + ".bak"}
+    except Exception as e:
+        raise HTTPException(500, f"保存失败: {e}")
+
+
+def io_open(path, enc):
+    return open(path, "r", encoding=enc)
