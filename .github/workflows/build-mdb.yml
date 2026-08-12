@@ -47,7 +47,7 @@ jobs:
             } catch {}
           }
           if (-not $ok) {
-            Write-Host "直链下载失败，改用 choco 安装..."
+            Write-Host "Direct download failed, fallback to choco install..."
             choco install accessdatabaseengine -y --no-progress
           } else {
             Start-Process .\ace_x64.exe -ArgumentList '/quiet' -Wait
