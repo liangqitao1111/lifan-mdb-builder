@@ -67,6 +67,26 @@ def test_upload_tables(db_id):
     assert len(tables) > 0
 
 
+def test_table_sort_order(db_id):
+    """排序参数：order_by 列名白名单 + asc/desc + 非法列名安全降级"""
+    r = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=50")
+    assert r.status_code == 200
+    base = r.json()["rows"]
+    assert len(base) > 1
+
+    asc = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=50&order_by=TCCDSD&order_dir=asc").json()["rows"]
+    desc = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=50&order_by=TCCDSD&order_dir=desc").json()["rows"]
+    vals_asc = [row.get("TCCDSD") for row in asc if row.get("TCCDSD") is not None]
+    vals_desc = [row.get("TCCDSD") for row in desc if row.get("TCCDSD") is not None]
+    assert len(vals_asc) > 1 and len(vals_desc) > 1
+    assert vals_asc == sorted(vals_asc), "asc 排序未生效"
+    assert vals_desc == sorted(vals_desc, reverse=True), "desc 排序未生效"
+    # 非法列名：安全忽略（返回默认顺序，不报错、不注入）
+    bad = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?order_by=__nope__\" OR 1=1 --&order_dir=desc")
+    assert bad.status_code == 200
+    assert [r.get("id") for r in bad.json()["rows"]] == [r.get("id") for r in base[:len(bad.json()["rows"])]]
+
+
 def test_table_read_paged(db_id):
     t = "z_ZuanKong" if "z_ZuanKong" in req("get", f"/api/db/{db_id}/tables").json()["tables"] else "ZK"
     r = req("get", f"/api/db/{db_id}/table/{t}?page=1&page_size=20")

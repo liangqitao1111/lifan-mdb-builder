@@ -204,7 +204,8 @@ def list_tables(db_path):
         conn.close()
 
 
-def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None, exact=False):
+def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None, exact=False,
+                 order_by=None, order_dir="asc"):
     """分页读表；keyword 匹配 search_col（或所有文本列）；exact=True 按指定列精确匹配
     （钻孔编号精确过滤，避免 LIKE 前缀相似孔号污染：'26-ZD-GZXT-1' 误匹配 10/11/12…）"""
     conn = conn_for(db_path)
@@ -221,8 +222,11 @@ def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None
                 params = [f"%{keyword}%"] * len(targets)
         total = conn.execute(f'SELECT COUNT(*) FROM "{table}" {where}', params).fetchone()[0]
         offset = (page - 1) * page_size
+        order_sql = ""
+        if order_by and order_by in cols:
+            order_sql = f' ORDER BY "{order_by}" ' + ("DESC" if str(order_dir).lower() == "desc" else "ASC")
         rows = conn.execute(
-            f'SELECT * FROM "{table}" {where} LIMIT ? OFFSET ?', params + [page_size, offset]
+            f'SELECT * FROM "{table}" {where}{order_sql} LIMIT ? OFFSET ?', params + [page_size, offset]
         ).fetchall()
         return {"columns": cols, "rows": [dict(r) for r in rows], "total": total,
                 "page": page, "page_size": page_size}

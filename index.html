@@ -324,6 +324,19 @@ a:hover { text-decoration: underline; }
 
 .t-row { transition: background .12s; }
 .t-row:hover { background: rgba(0,113,227,.05); }
+
+/* 数据表交互增强：冻结列/长文本截断/排序筛选/键盘焦点 */
+.t-head .cell-fixed, .t-row .cell-fixed { position: sticky; background: inherit; }
+.t-row .cell-fixed { z-index: 1; }
+.t-head .cell-fixed { z-index: 4; }
+.t-row.cell-active { box-shadow: inset 3px 0 0 var(--primary); background: rgba(0,113,227,.06) !important; }
+.t-row .cell-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.t-head .col-sort { cursor: pointer; color: var(--steel); display: inline-flex; align-items: center; min-width: 0; }
+.t-head .col-sort:hover, .t-head .col-sort.sorted { color: var(--primary); }
+.t-head .col-act { display: none; }
+.t-head div:hover .col-act, .t-head .col-act:hover { display: inline-flex; }
+#onlineGrid:focus { outline: none; }
+#onlineGrid:focus-visible { outline: 1px solid var(--primary); outline-offset: -1px; }
 </style>
 </head>
 <body>
@@ -1587,6 +1600,7 @@ function wsMarkTab(){
 }
 function wsSetTab(tbl){
   OData.table = tbl; OData.page = 1; OData.keyword = ''; OData.searchCol = ''; OData.exact = false;
+  OData.orderBy = ''; OData.orderDir = ''; OData.activeRow = -1;
   const si = document.getElementById('onlineSearch');
   if (si) { si.value = ''; }
   const cur = document.getElementById('wsCurTable');
@@ -2079,7 +2093,7 @@ async function uploadMdbFile(){
 }
 
 
-const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null };
+const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null, orderBy: '', orderDir: '', activeRow: -1 };
 async function renderDataOnline(){
   if (!API_STATE.online || !API_STATE.dbId) return renderData();
   if (!API_STATE.tables) {
@@ -2153,6 +2167,7 @@ async function loadOnlinePage(page){
   let q = '/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table)
         + '?page=' + OData.page + '&page_size=' + OData.pageSize;
   if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol) + '&exact=' + (OData.exact ? '1' : '0');
+  if (OData.orderBy) q += '&order_by=' + encodeURIComponent(OData.orderBy) + '&order_dir=' + encodeURIComponent(OData.orderDir || 'asc');
   const info = document.getElementById('onlinePgInfo');
   if (info) info.textContent = '查询中…';
   try {
@@ -2220,13 +2235,35 @@ function renderOnlineRows(rows){
       if (vals.length && vals.every(v => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())))) numCols[c] = true;
     });
   }
-  const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--hairline);"><div>#</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(COLUMN_CN[c] || c) + '</div>').join('') + '<div>操作</div></div>';
+  const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';min-width:' + minW + 'px;position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--hairline);">' +
+    '<div class="cell-fixed" style="left:20px;">#</div>' +
+    cols.map((c, ci) => {
+      const sorted = OData.orderBy === c;
+      const cn = escHtml(COLUMN_CN[c] || c);
+      const ind = sorted ? '<span style="font-size:10px;margin-left:2px;">' + (OData.orderDir === 'desc' ? '↓' : '↑') + '</span>' : '<span class="col-act" style="font-size:10px;margin-left:2px;">⇅</span>';
+      return '<div class="' + (ci === 0 ? 'cell-fixed' : '') + '" style="display:flex;align-items:center;gap:5px;' + (ci === 0 ? 'left:80px;' : '') + '">' +
+        '<span class="col-sort' + (sorted ? ' sorted' : '') + '" style="flex:1;min-width:0;" title="' + (sorted ? '点击切换排序方向' : '点击排序') + '" onclick="sortBy(\'' + c + '\')"><span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">' + cn + '</span>' + ind + '</span>' +
+        '<span class="col-act" style="cursor:pointer;font-size:12px;" title="按此列筛选" onclick="filterBy(\'' + c + '\')">⌕</span>' +
+      '</div>';
+    }).join('') +
+    '<div>操作</div></div>';
   const body = rows.length ? rows.map((row, ri) => {
     const idJs = JSON.stringify(row.id == null ? '' : row.id).replace(/"/g, '');
     OData.rowCache[String(row.id)] = row;
-    return '<div class="t-row" style="grid-template-columns:' + gridColsReal + ';padding:0 14px;min-width:' + minW + 'px;' + (ri % 2 ? 'background:rgba(0,0,0,.015);' : '') + '">' +
-      '<div class="muted">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
-      cols.map(c => '<div style="font-size:12.5px;cursor:pointer;' + (numCols[c] ? 'text-align:right;font-variant-numeric:tabular-nums;' : '') + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + (row[c] === null || row[c] === undefined || row[c] === '' ? '<span class="muted">—</span>' : escHtml(fmtNum(row[c]))) + '</div>').join('') +
+    const activeCls = ri === OData.activeRow ? ' cell-active' : '';
+    return '<div class="t-row' + activeCls + '" style="grid-template-columns:' + gridColsReal + ';min-width:' + minW + 'px;' + (ri % 2 ? 'background:rgba(0,0,0,.015);' : '') + '" onclick="OData.activeRow=' + ri + ';paintActiveRow()">' +
+      '<div class="muted cell-fixed" style="left:20px;">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
+      cols.map((c, ci) => {
+        const cls = (ci === 0 ? ' cell-fixed' : '') + (WS_COL_WIDE.includes(c) ? ' cell-clamp' : '');
+        const stl = (ci === 0 ? 'left:80px;' : '') + 'cursor:pointer;' + (numCols[c] ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
+        if (c === 'CY') {
+          const on = row[c] === 1 || row[c] === '1';
+          return '<div style="' + (ci === 0 ? 'left:80px;' : '') + 'cursor:pointer;" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')"><span class="status-pill ' + (on ? 'ok' : 'warn') + '">' + (on ? '参与' : '不参与') + '</span></div>';
+        }
+        const val = row[c] === null || row[c] === undefined || row[c] === '' ? '<span class="muted">—</span>' : escHtml(fmtNum(row[c]));
+        const tip = WS_COL_WIDE.includes(c) ? escAttr(row[c] == null ? '' : String(row[c])) + ' · 点击编辑' : '点击编辑';
+        return '<div class="' + cls.trim() + '" style="' + stl + '" title="' + tip + '" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + val + '</div>';
+      }).join('') +
       '<div>' +
         (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
         (can('data_edit') && can('data_delete') ? ' · ' : '') +
@@ -2234,6 +2271,69 @@ function renderOnlineRows(rows){
       '</div></div>';
   }).join('') : '<div style="padding:32px;text-align:center;color:var(--steel);">' + (OData.keyword ? '无匹配结果' : '暂无数据') + '</div>';
   if (grid) grid.innerHTML = '<div style="min-width:100%;">' + head + body + '</div>';
+  bindGridKeys();
+}
+
+function sortBy(c){
+  if (OData.orderBy === c) {
+    if (OData.orderDir === 'asc') OData.orderDir = 'desc';
+    else if (OData.orderDir === 'desc') { OData.orderBy = ''; OData.orderDir = ''; }
+    else { OData.orderBy = c; OData.orderDir = 'asc'; }
+  } else { OData.orderBy = c; OData.orderDir = 'asc'; }
+  loadOnlinePage(1);
+}
+function filterBy(c){
+  const cur = (OData.searchCol === c && OData.keyword) ? OData.keyword : '';
+  const html = '<div style="padding:18px 22px;max-width:440px;">' +
+    '<div style="font-size:14px;font-weight:600;margin-bottom:4px;">按「' + escHtml(COLUMN_CN[c] || c) + '」筛选</div>' +
+    '<p style="margin:0 0 12px;font-size:12px;color:var(--muted);">模糊匹配该列，可与排序叠加；不输入直接应用则清除该列筛选。</p>' +
+    '<input id="filterInput" placeholder="输入关键词…" value="' + escAttr(cur) + '" style="width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;font-size:13px;box-sizing:border-box;">' +
+    '<div style="display:flex;gap:10px;margin-top:14px;">' +
+      '<button class="btn btn-primary" onclick="filterApply(\'' + c + '\', true)">应用</button>' +
+      '<button class="btn btn-secondary" onclick="filterApply(\'' + c + '\', false)">清除该列</button>' +
+      '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '</div></div>';
+  openModal('列筛选 · ' + (COLUMN_CN[c] || c), html);
+  setTimeout(() => { const i = document.getElementById('filterInput'); if (i) i.focus(); }, 50);
+}
+function filterApply(c, apply){
+  const kw = apply ? (document.getElementById('filterInput') ? document.getElementById('filterInput').value.trim() : '') : '';
+  OData.searchCol = kw ? c : '';
+  OData.keyword = kw;
+  OData.exact = false;
+  OData.page = 1;
+  const si = document.getElementById('onlineSearch');
+  if (si) si.value = kw;
+  closeModal();
+  loadOnlinePage(1);
+}
+function bindGridKeys(){
+  const grid = document.getElementById('onlineGrid');
+  if (!grid || grid.dataset.kb) return;
+  grid.dataset.kb = '1';
+  grid.tabIndex = 0;
+  grid.addEventListener('keydown', e => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    const rows = Array.from(grid.querySelectorAll('.t-row'));
+    if (!rows.length) return;
+    if (e.key === 'Escape') { OData.activeRow = -1; paintActiveRow(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (OData.activeRow < 0) OData.activeRow = 0;
+      else OData.activeRow = Math.min(rows.length - 1, Math.max(0, OData.activeRow + (e.key === 'ArrowDown' ? 1 : -1)));
+      paintActiveRow();
+      rows[OData.activeRow].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && OData.activeRow >= 0) {
+      e.preventDefault();
+      const cell = rows[OData.activeRow].querySelector('div[onclick*="inlineEdit"]');
+      if (cell) cell.click();
+    }
+  });
+}
+function paintActiveRow(){
+  const grid = document.getElementById('onlineGrid');
+  if (!grid) return;
+  grid.querySelectorAll('.t-row').forEach((r, i) => r.classList.toggle('cell-active', i === OData.activeRow));
 }
 
 function openOnlineEditById(id){
