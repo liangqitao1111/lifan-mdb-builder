@@ -7,34 +7,34 @@
 <style>
 /* ============== 设计 Tokens（Notion 风） ============== */
 :root {
-  --primary: #5645d4;
-  --primary-pressed: #4534b3;
-  --navy: #0a1530;
+  --primary: #0071e3;
+  --primary-pressed: #0066cc;
+  --navy: #000000;
   --canvas: #ffffff;
-  --surface: #f6f5f4;
-  --surface-soft: #fafaf9;
-  --hairline: #e5e3df;
-  --hairline-strong: #c8c4be;
-  --ink: #1a1a1a;
-  --charcoal: #37352f;
-  --slate: #5d5b54;
-  --steel: #787671;
-  --muted: #bbb8b1;
+  --surface: #f5f5f7;
+  --surface-soft: #fafafc;
+  --hairline: #e5e5ea;
+  --hairline-strong: #c7c7cc;
+  --ink: #1d1d1f;
+  --charcoal: #3a3a3c;
+  --slate: #6e6e73;
+  --steel: #8e8e93;
+  --muted: #aeaeb2;
   --on-dark: #ffffff;
-  --on-dark-muted: #a4a097;
-  --success: #1aae39;
-  --warning: #dd5b00;
-  --error: #e03131;
-  --tint-lavender: #e6e0f5;
-  --tint-sky: #dcecfa;
-  --tint-mint: #d9f3e1;
-  --tint-peach: #ffe8d4;
-  --tint-yellow: #fef7d6;
-  --tint-yellow-bold: #f9e79f;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-card: 0 4px 12px rgba(15, 15, 15, .08);
-}
+  --on-dark-muted: #a1a1a6;
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --error: #ff3b30;
+  --tint-lavender: #f2f2f7;
+  --tint-sky: #e8f1fc;
+  --tint-mint: #e8f8ee;
+  --tint-peach: #fff2e8;
+  --tint-yellow: #fff8e6;
+  --tint-yellow-bold: #ffd60a;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-card: 0 8px 30px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+}}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: var(--ink); background: var(--canvas); -webkit-font-smoothing: antialiased; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
@@ -81,13 +81,15 @@ a:hover { text-decoration: underline; }
 .sidebar .sb-section { padding: 16px 24px 4px; font-size: 11px; font-weight: 600; color: var(--steel); letter-spacing: 1px; text-transform: uppercase; }
 .nav-item { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 24px; color: var(--slate); font-size: 14px; cursor: pointer; }
 .nav-item:hover { background: rgba(0,0,0,.04); }
-.nav-item.active { background: var(--canvas); color: var(--ink); font-weight: 500; border-left: 2px solid var(--primary); padding-left: 22px; }
+.nav-item { margin: 2px 12px; padding: 0 14px; border-radius: 10px; height: 38px; }
+.nav-item:hover { background: rgba(0,0,0,.05); }
+.nav-item.active { background: #e8f1fc; color: var(--primary); font-weight: 600; }
 .nav-item svg { flex: 0 0 24px; }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar { height: 64px; background: var(--canvas); border-bottom: 1px solid var(--hairline); display: flex; align-items: center; justify-content: space-between; padding: 0 32px; gap: 16px; }
 .topbar .crumb { font-size: 14px; font-weight: 500; }
-.topbar .search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; background: var(--surface); border-radius: var(--radius-md); width: 360px; }
+.topbar .search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; background: var(--surface); border-radius: 999px; width: 360px; }
 .topbar .search input { background: transparent; border: none; outline: none; flex: 1; }
 .topbar .user-area { display: flex; align-items: center; gap: 12px; }
 .topbar .avatar { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; background: var(--tint-lavender); border-radius: 18px; }
@@ -101,7 +103,9 @@ a:hover { text-decoration: underline; }
 
 /* ============== 通用卡片 / 按钮 ============== */
 .card { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 22px; }
-.btn { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .18s; }
+.btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,.25); }
+.btn-primary:hover { background: var(--primary-pressed); transform: translateY(-1px); }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-pressed); }
 .btn-secondary { background: #fff; color: var(--charcoal); border: 1px solid var(--hairline-strong); }
@@ -111,7 +115,7 @@ a:hover { text-decoration: underline; }
 
 /* ============== 仪表盘 ============== */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-.stat-card { background: var(--canvas); border: 1px solid var(--hairline); border-radius: var(--radius-lg); padding: 22px; display: flex; flex-direction: column; gap: 8px; }
+.stat-card { background: var(--canvas); border: 1px solid var(--hairline); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-card); }
 .stat-card .stat-head { display: flex; justify-content: space-between; align-items: center; }
 .stat-card .stat-head .label { font-size: 13px; font-weight: 500; color: var(--steel); }
 .stat-card .stat-head .ic { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
@@ -240,6 +244,41 @@ a:hover { text-decoration: underline; }
 .pagination select { border: 1px solid var(--hairline-strong); border-radius: 6px; padding: 4px 6px; background: #fff; color: var(--ink); }
 .build-actions { display: flex; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--hairline-strong); }
 
+
+/* ============== Apple 风格工作台 ============== */
+.ws-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+.ws-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; color: var(--ink); line-height: 1.1; }
+.ws-sub { color: var(--slate); font-size: 14px; margin-top: 4px; }
+.ws-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+.ws-stat { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow-card); }
+.ws-stat .lbl { font-size: 12px; color: var(--steel); font-weight: 600; letter-spacing: .3px; }
+.ws-stat .num { font-size: 26px; font-weight: 700; margin-top: 4px; letter-spacing: -0.5px; }
+.ws-stat .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ws-grid { display: grid; grid-template-columns: 250px 1fr 320px; gap: 14px; align-items: start; }
+.ws-panel { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; box-shadow: var(--shadow-card); overflow: hidden; }
+.ws-panel .p-head { padding: 12px 16px; border-bottom: 1px solid var(--hairline); font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.ws-hole { padding: 8px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; border-bottom: 1px solid #f0f0f2; }
+.ws-hole:hover { background: var(--surface-soft); }
+.ws-hole.active { background: #e8f1fc; color: var(--primary); font-weight: 600; }
+.ws-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 600; margin-left: 4px; }
+.ws-badge.h { background: var(--error); }
+.ws-badge.m { background: var(--warning); }
+.ws-issue { padding: 10px 14px; border-bottom: 1px solid #f0f0f2; font-size: 12.5px; }
+.ws-issue .rid { font-weight: 700; margin-right: 6px; }
+.ws-issue .msg { color: var(--charcoal); }
+.ws-issue .fld { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.ws-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+.ws-empty { padding: 48px 20px; text-align: center; color: var(--steel); font-size: 14px; }
+.ws-upload { max-width: 640px; margin: 60px auto; text-align: center; }
+.ws-upload .big { font-size: 40px; font-weight: 700; letter-spacing: -0.8px; margin-bottom: 10px; }
+.ws-upload .drop { margin: 28px auto; padding: 48px 24px; border: 2px dashed var(--hairline-strong); border-radius: 20px; background: var(--surface-soft); cursor: pointer; transition: all .2s; }
+.ws-upload .drop:hover { border-color: var(--primary); background: #eef6ff; }
+.ws-tool-card { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.ws-tool-card .card { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; padding: 18px; box-shadow: var(--shadow-card); cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.ws-tool-card .card:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(0,0,0,.08); }
+.ws-tool-card .card .t { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.ws-tool-card .card .d { font-size: 12.5px; color: var(--slate); line-height: 1.5; }
+.ws-tool-card .card .a { display: inline-block; margin-top: 12px; color: var(--primary); font-size: 13px; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -292,15 +331,12 @@ a:hover { text-decoration: underline; }
       <div class="sb-logo">理</div>
       <div class="sb-name">理反 Web</div>
     </div>
-    <div class="sb-section">复核闭环</div>
-    <a class="nav-item" data-route="mdb"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="5" rx="8" ry="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" stroke="currentColor" stroke-width="1.8"/></svg>数据库接入</a>
-    <a class="nav-item" data-route="data"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/></svg>数据管理</a>
-    <a class="nav-item" data-route="hub"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 2.5v5.2c0 4.6-3 7.9-7 9.8-4-1.9-7-5.2-7-9.8V5.5L12 3zM8.5 12l2.3 2.3L15.5 9.8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>复核工作台</a>
-    <a class="nav-item" data-route="borehole"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5l5 5L19.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>钻孔复核</a>
-    <a class="nav-item" data-route="spt"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 3v4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>批量修正</a>
+    <div class="sb-section">工作区</div>
+    <a class="nav-item" data-route="workspace"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/></svg>数据工作台</a>
+    <a class="nav-item" data-route="tools"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>修正与成果</a>
     <a class="nav-item" data-route="build"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0l4-4m-4 4l-4-4M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>生成 MDB</a>
-      <a class="nav-item" data-route="config"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span>参数中心</span></a>
-    <div class="sb-section" style="margin-top:auto;">账户</div>
+    <a class="nav-item" data-route="config"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>参数中心</a>
+<div class="sb-section" style="margin-top:auto;">账户</div>
     <a class="nav-item" id="logoutBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>退出登录</a>
   </aside>
 
@@ -573,13 +609,15 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 /* ============================================================
    路由
    ============================================================ */
-const ROUTES = ['mdb','data','hub','borehole','spt','build','config'];
+const ROUTES = ['workspace','tools','build','config'];
 window.CURRENT_HOLE = '';
 function route(name){
-  if (!ROUTES.includes(name)) name = 'mdb';
+  if (name === 'mdb' || name === 'data' || name === 'hub' || name === 'borehole') name = 'workspace';
+  if (name === 'spt') name = 'tools';
+  if (!ROUTES.includes(name)) name = 'workspace';
   location.hash = '#' + name;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.route === name));
-  document.getElementById('crumb').textContent = {mdb:'数据库接入', data:'数据管理', hub:'复核工作台', borehole:'钻孔复核', spt:'批量修正', build:'生成 MDB', config:'参数中心'}[name];
+  document.getElementById('crumb').textContent = {workspace:'数据工作台', tools:'修正与成果', build:'生成 MDB', config:'参数中心'}[name];
   render(name);
 }
 window.addEventListener('hashchange', () => route(location.hash.replace('#','')));
@@ -993,12 +1031,9 @@ async function toggleUser(id){
    视图：复核工作台 / 钻孔复核 / 批量修正（理反 V3.0.4 核心业务）
    ============================================================ */
 function render(name){
-  if (name === 'mdb') return renderMdb();
-  if (name === 'data') return (API_STATE.online && API_STATE.dbId) ? renderDataOnline() : renderData();
-  if (name === 'hub') return renderReview();
-  if (name === 'borehole') return renderBorehole();
-  if (name === 'spt') return renderSpt();
-    if (name === 'config') return renderConfig();
+  if (name === 'workspace') return renderWorkspace();
+  if (name === 'tools') return renderTools();
+  if (name === 'config') return renderConfig();
   if (name === 'build') return renderBuild();
 }
 async function renderReview(){
@@ -1158,6 +1193,289 @@ async function renderBorehole(){
     </div>
   `;
 }
+
+/* ============ 数据工作台（数据管理 + 复核合并） ============ */
+let WS = { review: null, zkbh: '', table: 'z_g_TuCeng' };
+
+async function renderWorkspace(){
+  const el = document.getElementById('content');
+  if (!API_STATE.online || !API_STATE.dbId) {
+    el.innerHTML = `
+      <div class="ws-upload">
+        <div class="big">数据工作台</div>
+        <div style="color:var(--slate);font-size:15px;">上传理正数据库（.mdb / .lz），在线复核与管理一体化</div>
+        <div class="drop" onclick="document.getElementById('wsFile').click()">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" style="margin:0 auto 10px;display:block;"><path d="M12 16V4m0 0L8 8m4-4 4 4M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <div style="font-size:15px;font-weight:600;">点击选择数据库文件</div>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">支持 .mdb / .lz（ZIP 包自动解压）· 解析为在线工作库</div>
+        </div>
+        <input type="file" id="wsFile" accept=".mdb,.lz,.accdb" style="display:none" onchange="wsUpload(this.files[0])">
+        <div id="wsUploadStatus" style="font-size:13px;color:var(--slate);"></div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="ws-head">
+      <div>
+        <div class="ws-title">数据工作台</div>
+        <div class="ws-sub">在线库 db_id=${API_STATE.dbId} · 钻孔数据 · 复核问题 · 在线编辑，一处完成</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" onclick="renderWorkspace()">重新复核</button>
+        <button class="btn btn-secondary" onclick="location.hash='#mdb';route('workspace')">切换库</button>
+      </div>
+    </div>
+    <div class="ws-stats">
+      <div class="ws-stat"><div class="lbl">总孔数</div><div class="num" id="wsS0">—</div><div class="sub">已全量复核</div></div>
+      <div class="ws-stat"><div class="lbl">风险钻孔</div><div class="num" id="wsS1" style="color:var(--warning);">—</div><div class="sub">需人工确认</div></div>
+      <div class="ws-stat"><div class="lbl">高风险问题</div><div class="num" id="wsS2" style="color:var(--error);">—</div><div class="sub">H 级</div></div>
+      <div class="ws-stat"><div class="lbl">问题总数</div><div class="num" id="wsS3">—</div><div class="sub">含 M 级</div></div>
+    </div>
+    <div class="ws-grid">
+      <div class="ws-panel">
+        <div class="p-head">钻孔列表 <span id="wsHoleCount" style="color:var(--muted);font-weight:400;"></span></div>
+        <div id="wsHoles" style="max-height:calc(100vh - 320px);overflow-y:auto;"></div>
+      </div>
+      <div class="ws-panel">
+        <div class="ws-toolbar">
+          <select id="dataTableSel" style="height:34px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 10px;background:#fff;min-width:200px;font-size:13px;"></select>
+          <div class="search-in" style="flex:1;max-width:260px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
+          <button class="btn btn-secondary" style="padding:6px 14px;font-size:12.5px;" onclick="loadOnlinePage(1)">刷新</button>
+        </div>
+        <div style="overflow-x:auto;min-height:300px;" id="onlineGrid"></div>
+        <div class="pagination" style="padding:10px 16px;">
+          <span class="pg-info" id="onlinePgInfo"></span>
+          <select id="onlinePageSize" onchange="OData.pageSize=parseInt(this.value,10);OData.page=1;loadOnlinePage(1)" style="height:30px;border:1px solid var(--hairline);border-radius:8px;font-size:12px;">
+            <option value="20">20 条/页</option><option value="50" selected>50 条/页</option><option value="100">100 条/页</option>
+          </select>
+          <button class="btn btn-secondary" id="onlinePrev" onclick="loadOnlinePage(OData.page-1)" style="padding:5px 12px;font-size:12px;">上一页</button>
+          <button class="btn btn-secondary" id="onlineNext" onclick="loadOnlinePage(OData.page+1)" style="padding:5px 12px;font-size:12px;">下一页</button>
+        </div>
+      </div>
+      <div class="ws-panel">
+        <div class="p-head">复核问题 <span id="wsIssueCount" style="color:var(--muted);font-weight:400;"></span></div>
+        <div id="wsIssues" style="max-height:calc(100vh - 320px);overflow-y:auto;"></div>
+      </div>
+    </div>`;
+  await wsLoadReview();
+}
+
+async function wsUpload(file){
+  if (!file) return;
+  pendingMdbFile = file;
+  const st = document.getElementById('wsUploadStatus');
+  st.textContent = '上传解析中…'; st.style.color = 'var(--steel)';
+  try {
+    const r = await apiUpload('/upload', file);
+    API_STATE.dbId = r.db_id; API_STATE.dbName = r.file || file.name;
+    API_STATE.dbSize = r.size || 0; API_STATE.tables = r.tables || {};
+    saveApiState(); updateConnBar();
+    showToast('上传成功：' + Object.keys(API_STATE.tables).length + ' 张表', 'info');
+    location.hash = '#workspace'; renderWorkspace();
+  } catch (e) {
+    st.textContent = '上传失败：' + ((e && e.message) || e); st.style.color = 'var(--error)';
+  }
+}
+
+async function wsLoadReview(){
+  try {
+    const data = await apiPost('/db/' + API_STATE.dbId + '/review', {});
+    WS.review = data;
+    const s = data.summary || {};
+    const holes = document.getElementById('wsS0'), risk = document.getElementById('wsS1'),
+          h = document.getElementById('wsS2'), total = document.getElementById('wsS3');
+    if (holes) holes.textContent = s.holes || 0;
+    if (risk) risk.textContent = Object.keys(data.by_hole || {}).filter(k => data.by_hole[k].h || data.by_hole[k].m).length;
+    if (h) h.textContent = s.h || 0;
+    if (total) total.textContent = s.total || 0;
+    const cnt = document.getElementById('wsHoleCount');
+    if (cnt) cnt.textContent = (s.holes || 0) + ' 孔';
+    // 钻孔列表：问题孔优先
+    const by = data.by_hole || {};
+    const risky = Object.keys(by).filter(k => by[k].h || by[k].m).sort();
+    const clean = Object.keys(by).filter(k => !(by[k].h || by[k].m)).sort();
+    const box = document.getElementById('wsHoles');
+    if (box) {
+      box.innerHTML = risky.map(zk => wsHoleItem(zk, by[zk])).join('')
+        + (clean.length ? '<div style="padding:8px 14px;font-size:11px;color:var(--muted);font-weight:600;">通过 · ' + clean.length + ' 孔</div>' : '')
+        + clean.slice(0, 40).map(zk => wsHoleItem(zk, by[zk])).join('')
+        + (clean.length > 40 ? '<div style="padding:8px 14px;font-size:11px;color:var(--muted);">…共 ' + clean.length + ' 孔</div>' : '');
+      // 默认选中第一个问题孔
+      const first = risky[0] || clean[0];
+      if (first) wsSelectHole(first);
+    }
+    await wsInitTables();
+  } catch (e) {
+    showToast('复核失败：' + ((e && e.message) || e), 'err');
+  }
+}
+
+function wsHoleItem(zk, info){
+  const tags = (info.h ? '<span class="ws-badge h">H·' + info.h + '</span>' : '') +
+               (info.m ? '<span class="ws-badge m">M·' + info.m + '</span>' : '');
+  return '<div class="ws-hole' + (zk === WS.zkbh ? ' active' : '') + '" onclick="wsSelectHole(\'' + escAttr(zk) + '\')">' +
+         '<span>' + escHtml(zk) + '</span><span>' + tags + '</span></div>';
+}
+
+async function wsSelectHole(zk){
+  WS.zkbh = zk;
+  document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.textContent.includes(zk)));
+  // 右栏问题面板
+  const box = document.getElementById('wsIssues');
+  const cnt = document.getElementById('wsIssueCount');
+  if (box) box.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px;">加载 ' + escHtml(zk) + ' 复核结果…</div>';
+  try {
+    const r = await apiGet('/db/' + API_STATE.dbId + '/review/' + encodeURIComponent(zk));
+    const issues = r.issues || [];
+    if (cnt) cnt.textContent = issues.length + ' 项';
+    if (box) {
+      box.innerHTML = issues.map(i =>
+        '<div class="ws-issue"><div><span class="rid" style="color:' + (i.level === 'H' ? 'var(--error)' : 'var(--warning)') + ';">' + escHtml(i.rule_id) + '</span>' +
+        '<span class="msg">' + escHtml(i.message) + '</span></div>' +
+        (i.field ? '<div class="fld">' + escHtml(i.field) + '</div>' : '') + '</div>').join('')
+        || '<div style="padding:20px;color:var(--success);font-size:13px;">✓ 本孔复核通过</div>';
+    }
+  } catch (e) {
+    if (box) box.innerHTML = '<div style="padding:20px;color:var(--error);font-size:13px;">加载失败：' + escHtml((e && e.message) || e) + '</div>';
+  }
+  // 中栏切到地层表并搜索该孔
+  if (!API_STATE.tables) await wsInitTables();
+  const names = Object.keys(API_STATE.tables || {});
+  const strataTbl = names.find(n => /TuCeng|Strata|DiCeng/i.test(n)) || names[0];
+  const sel = document.getElementById('dataTableSel');
+  if (sel && names.includes(strataTbl)) { sel.value = strataTbl; OData.table = strataTbl; }
+  const si = document.getElementById('onlineSearch');
+  if (si) { si.value = zk; OData.keyword = zk; OData.searchCol = 'ZKBH'; OData.page = 1; }
+  await loadOnlinePage(1);
+}
+
+async function wsInitTables(){
+  if (API_STATE.tables) return;
+  try {
+    const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables');
+    API_STATE.tables = {};
+    (r.tables || []).forEach(t => API_STATE.tables[t] = null);
+    saveApiState();
+  } catch (e) { return; }
+  const sel = document.getElementById('dataTableSel');
+  if (!sel) return;
+  const names = Object.keys(API_STATE.tables);
+  if (!OData.table || !names.includes(OData.table)) OData.table = names[0];
+  sel.innerHTML = names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('');
+  sel.addEventListener('change', e => { OData.table = e.target.value; OData.page = 1; OData.keyword = ''; const si = document.getElementById('onlineSearch'); if (si) si.value = ''; loadOnlinePage(1); });
+}
+
+/* ============ 修正与成果（批量修正 + 统计 + DXF） ============ */
+async function renderTools(){
+  const el = document.getElementById('content');
+  if (!API_STATE.online || !API_STATE.dbId) {
+    el.innerHTML = '<h1 class="page-title">修正与成果</h1><p class="page-sub">请先在上传数据库（数据工作台）后使用。</p>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="ws-head">
+      <div>
+        <div class="ws-title">修正与成果</div>
+        <div class="ws-sub">标贯批量修正 · 岩溶/土工统计 · DXF 成果导出</div>
+      </div>
+    </div>
+    <div class="ws-tool-card">
+      <div class="card" onclick="toolsSpt()">
+        <div class="t">标贯批量修正</div>
+        <div class="d">SPT 杆长/击数修正建议扫描（只读，建议值可在工作台编辑应用）</div>
+        <span class="a">查看建议 →</span>
+      </div>
+      <div class="card" onclick="runStats('soil')">
+        <div class="t">土工统计</div>
+        <div class="d">按地层分组的土工试验统计表（xlsx 下载）</div>
+        <span class="a">生成统计 →</span>
+      </div>
+      <div class="card" onclick="runStats('karst_b')">
+        <div class="t">岩溶统计（B 类）</div>
+        <div class="d">附表7 岩溶率统计表 + 附表8 溶洞统计表</div>
+        <span class="a">生成统计 →</span>
+      </div>
+      <div class="card" onclick="runStats('karst_a')">
+        <div class="t">岩溶统计（A 类）</div>
+        <div class="d">A 类工程岩溶率/溶洞统计（xlsx）</div>
+        <span class="a">生成统计 →</span>
+      </div>
+      <div class="card" onclick="toolsDxf('profile')">
+        <div class="t">纵断面 DXF</div>
+        <div class="d">选择钻孔生成地质纵断面图（CAD 可编辑）</div>
+        <span class="a">导出 DXF →</span>
+      </div>
+      <div class="card" onclick="toolsDxf('columns')">
+        <div class="t">综合小柱状图</div>
+        <div class="d">全部钻孔综合小柱状图（DXF）</div>
+        <span class="a">导出 DXF →</span>
+      </div>
+    </div>
+    <div id="toolsResult" style="margin-top:16px;"></div>`;
+}
+
+async function toolsSpt(){
+  const box = document.getElementById('toolsResult');
+  if (!box) return;
+  box.innerHTML = '<div style="padding:24px;color:var(--steel);">扫描修正建议…</div>';
+  try {
+    const data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {});
+    const sg = data.suggestions || [];
+    box.innerHTML = `
+      <div class="ws-panel">
+        <div class="p-head">标贯修正建议 · ${sg.length} 条</div>
+        <div style="max-height:420px;overflow-y:auto;">
+          ${sg.map(s => '<div class="ws-issue"><div><b style="color:var(--primary);">' + escHtml(s.zkbh || s.hole || '') + '</b> · ' + escHtml(s.old_value || s.original || '') + ' → <b>' + escHtml(s.new_value || s.suggested || '') + '</b></div><div class="fld">' + escHtml((s.reason || s.message || '') + ' ' + (s.rule_id || '')) + '</div></div>').join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
+        </div>
+      </div>`;
+  } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">扫描失败：' + escHtml((e && e.message) || e) + '</div>'; }
+}
+
+async function toolsDxf(kind){
+  const box = document.getElementById('toolsResult');
+  if (!box) return;
+  if (kind === 'profile') {
+    box.innerHTML = `
+      <div class="ws-panel" style="padding:18px;">
+        <div class="p-head" style="padding:0 0 12px;">导出纵断面 DXF</div>
+        <input id="dxfHoles" placeholder="钻孔编号，逗号分隔（≥2 个，如 26-ZD-GZXT-0-1,26-ZD-GZXT-0-2）" style="width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;font-size:13px;box-sizing:border-box;">
+        <div style="display:flex;gap:10px;margin-top:12px;align-items:center;">
+          <button class="btn btn-primary" onclick="toolsDxfRun('profile')">生成纵断面</button>
+          <button class="btn btn-secondary" onclick="toolsDxfRun('columns')">生成全部柱状图</button>
+          <span id="dxfStatus" style="font-size:12.5px;color:var(--steel);"></span>
+        </div>
+      </div>`;
+  } else {
+    box.innerHTML = `
+      <div class="ws-panel" style="padding:18px;">
+        <div class="p-head" style="padding:0 0 12px;">导出综合小柱状图</div>
+        <div style="font-size:13px;color:var(--slate);">为全部钻孔生成综合小柱状图 DXF（CAD 可编辑）。</div>
+        <div style="margin-top:12px;"><button class="btn btn-primary" onclick="toolsDxfRun('columns')">生成柱状图</button><span id="dxfStatus" style="font-size:12.5px;color:var(--steel);margin-left:10px;"></span></div>
+      </div>`;
+  }
+}
+
+async function toolsDxfRun(kind){
+  const st = document.getElementById('dxfStatus');
+  if (st) { st.textContent = '生成中…'; st.style.color = 'var(--steel)'; }
+  try {
+    let r;
+    if (kind === 'profile') {
+      const holes = (document.getElementById('dxfHoles') || {}).value || '';
+      r = await apiPost('/db/' + API_STATE.dbId + '/dxf/profile?holes=' + encodeURIComponent(holes), {});
+    } else {
+      r = await apiPost('/db/' + API_STATE.dbId + '/dxf/columns', {});
+    }
+    const dl = r.download || '';
+    const box = document.getElementById('toolsResult');
+    if (box) box.insertAdjacentHTML('beforeend',
+      '<div style="margin-top:10px;padding:12px 16px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b>（' + (r.placed !== undefined ? '放置 ' + r.placed + ' 处' : '') + '） <a href="' + escAttr(dl) + '" download style="color:var(--primary);font-weight:600;margin-left:8px;">下载</a></div>');
+    if (st) { st.textContent = '完成'; st.style.color = 'var(--success)'; }
+  } catch (e) {
+    if (st) { st.textContent = '失败：' + ((e && e.message) || e); st.style.color = 'var(--error)'; }
+  }
+}
+
 async function renderConfig(){
   const el = document.getElementById('content');
   if (!API_STATE.online || !API_STATE.dbId) {
