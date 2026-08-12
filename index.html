@@ -321,6 +321,9 @@ a:hover { text-decoration: underline; }
 @media (max-width: 480px) {
   .ws-stats { grid-template-columns: 1fr; }
 }
+
+.t-row { transition: background .12s; }
+.t-row:hover { background: rgba(0,113,227,.05); }
 </style>
 </head>
 <body>
@@ -1248,14 +1251,18 @@ const COLUMN_CN = {
   'BGDSD':'深度(m)','BGGC':'杆长(m)','BGJS':'实测N','BGXZJS':'修正N',
   'DTDSD':'深度(m)','DTLX':'类型','DTJS':'N63.5','DTXZJS':'修正',
   'SWCH':'序号','SWSD':'地下水位深度(m)','SWLX':'水位类型','SWXZ':'地下水类型','CY':'是否参与','SWCSRQ':'测水时间',
-  'QYBH':'取样编号','QYSD':'深度(m)','QYHSL':'含水率%','QYYX':'液限%','QYSY':'塑限%','QYDC':'综合定名'
+  'QYBH':'取样编号','QYSD':'深度(m)','QYHSL':'含水率%','QYYX':'液限%','QYSY':'塑限%','QYDC':'综合定名',
+  'QYZXMD':'干密度','QYZDMD':'最大干密度','QYSTXS':'初始孔隙比','QYZY010':'20~10mm','QYZY0005':'10~5mm',
+  'QYZY00501':'5~2mm','QYZY0102':'2~1mm','QYZY0203':'1~0.5mm','QYZY0304':'0.5~0.25mm',
+  'QYZY0405':'0.25~0.075mm','QYZY0506':'<0.075mm','QYHD':'样长(m)','QYLX':'取样类型','QYZLMD':'重度',
+  'QYKJQD':'抗剪强度','QYRHQD':'抗压强度','QYZCMZL':'总出模量'
 };
 const WS_COLS = {
-  'z_g_TuCeng':  ['TCXH','TCYMC','TCMC','TCMS','TCMSD','TCSID','TCKSX','TCCDSD','TCHD','TCYS','TCFHCD'],
+  'z_g_TuCeng':  ['TCXH','TCYMC','TCMC','TCCDSD','TCYS','TCMSD','TCSID','TCKSX','TCFHCD','TCHD','TCMS'],
   'z_y_BiaoGuan':['BGDSD','BGGC','BGJS','BGXZJS'],
   'z_y_DongTan': ['DTDSD','DTLX','DTJS','DTXZJS'],
   'z_g_ShuiWei': ['SWCH','SWSD','SWLX','SWXZ','CY','SWCSRQ'],
-  'z_c_QuYang':  ['QYBH','QYSD','QYHSL','QYYX','QYSY','QYDC']
+  'z_c_QuYang':  ['QYBH','QYSD','QYHSL','QYYX','QYSY','QYZXMD','QYZDMD','QYSTXS','QYZY010','QYZY0005','QYZY00501','QYZY0102','QYZY0203','QYZY0304','QYZY0405','QYZY0506','QYDC']
 };
 const WS_COL_WIDE = ['TCMS','TCMC','TCYMC','QYDC'];
 function fmtNum(v){
@@ -1431,7 +1438,7 @@ async function renderWorkspace(){
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="openColSettings()">列设置</button>
           <span style="font-size:11.5px;color:var(--muted);" id="wsCurTable"></span>
         </div>
-        <div style="overflow-x:auto;min-height:300px;" id="onlineGrid"></div>
+        <div style="overflow:auto;max-height:calc(100vh - 360px);min-height:300px;" id="onlineGrid"></div>
         <div class="pagination" style="padding:10px 16px;">
           <span class="pg-info" id="onlinePgInfo"></span>
           <select id="onlinePageSize" onchange="OData.pageSize=parseInt(this.value,10);OData.page=1;loadOnlinePage(1)" style="height:30px;border:1px solid var(--hairline);border-radius:8px;font-size:12px;">
@@ -2203,15 +2210,23 @@ function renderOnlineRows(rows){
   const prev = document.getElementById('onlinePrev'), next = document.getElementById('onlineNext');
   if (prev) prev.disabled = OData.page <= 1;
   if (next) next.disabled = OData.page >= totalPages;
-  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 260 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '3fr' : '1fr') + ')')).join(' ');
+  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 260 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '3fr' : '1fr') + ')')).concat(['90px']).join(' ');
   const minW = Math.max(640, cols.length * 90 + 160);
-  const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;"><div>#</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(COLUMN_CN[c] || c) + '</div>').join('') + '<div>操作</div></div>';
-  const body = rows.length ? rows.map(row => {
+  // 数字列右对齐（提升数值扫视效率）：纯数字值列
+  const numCols = {};
+  if (rows.length) {
+    cols.forEach(c => {
+      const vals = rows.slice(0, 20).map(r => r[c]).filter(v => v !== null && v !== undefined && v !== '');
+      if (vals.length && vals.every(v => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())))) numCols[c] = true;
+    });
+  }
+  const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';height:36px;padding:0 14px;background:var(--surface-soft);min-width:' + minW + 'px;position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--hairline);"><div>#</div>' + cols.map(c => '<div style="font-weight:600;font-size:12px;">' + escHtml(COLUMN_CN[c] || c) + '</div>').join('') + '<div>操作</div></div>';
+  const body = rows.length ? rows.map((row, ri) => {
     const idJs = JSON.stringify(row.id == null ? '' : row.id).replace(/"/g, '');
     OData.rowCache[String(row.id)] = row;
-    return '<div class="t-row" style="grid-template-columns:' + gridColsReal + ';padding:0 14px;min-width:' + minW + 'px;">' +
+    return '<div class="t-row" style="grid-template-columns:' + gridColsReal + ';padding:0 14px;min-width:' + minW + 'px;' + (ri % 2 ? 'background:rgba(0,0,0,.015);' : '') + '">' +
       '<div class="muted">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
-      cols.map(c => '<div style="font-size:12.5px;cursor:pointer;' + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + escHtml(fmtNum(row[c])) + '</div>').join('') +
+      cols.map(c => '<div style="font-size:12.5px;cursor:pointer;' + (numCols[c] ? 'text-align:right;font-variant-numeric:tabular-nums;' : '') + (WS_COL_WIDE.includes(c) ? 'white-space:normal;line-height:1.45;' : '') + '" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + (row[c] === null || row[c] === undefined || row[c] === '' ? '<span class="muted">—</span>' : escHtml(fmtNum(row[c]))) + '</div>').join('') +
       '<div>' +
         (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
         (can('data_edit') && can('data_delete') ? ' · ' : '') +
