@@ -34,6 +34,31 @@
   --radius-lg: 16px;
   --shadow-card: 0 8px 30px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
 }}
+:root[data-theme="dark"] {
+  --canvas: #000000;
+  --surface: #1c1c1e;
+  --surface-soft: #2c2c2e;
+  --hairline: #3a3a3c;
+  --hairline-strong: #48484a;
+  --ink: #f5f5f7;
+  --charcoal: #d1d1d6;
+  --slate: #98989d;
+  --steel: #8e8e93;
+  --muted: #636366;
+  --on-dark: #ffffff;
+  --on-dark-muted: #a1a1a6;
+  --tint-lavender: #26262a;
+  --tint-sky: #12263a;
+  --tint-mint: #0f2a1a;
+  --tint-peach: #2a1d0f;
+  --tint-yellow: #2a2410;
+  --shadow-card: 0 8px 30px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+}
+:root[data-theme="dark"] .topbar { background: rgba(0,0,0,.8); backdrop-filter: blur(12px); }
+:root[data-theme="dark"] .ws-panel, :root[data-theme="dark"] .ws-stat,
+:root[data-theme="dark"] .stat-card, :root[data-theme="dark"] .card,
+:root[data-theme="dark"] .ws-tool-card .card { background: #1c1c1e; }
+:root[data-theme="dark"] .login-brand { background: #000; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; color: var(--ink); background: var(--canvas); -webkit-font-smoothing: antialiased; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
@@ -275,6 +300,27 @@ a:hover { text-decoration: underline; }
 .switch span:before { content: ""; position: absolute; width: 22px; height: 22px; left: 2px; top: 2px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: .2s; }
 .switch input:checked + span { background: var(--primary); }
 .switch input:checked + span:before { transform: translateX(20px); }
+
+/* ============== 移动端适配 ============== */
+@media (max-width: 1100px) {
+  .ws-grid { grid-template-columns: 1fr; }
+  .ws-stats { grid-template-columns: repeat(2, 1fr); }
+  .ws-tool-card { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .topbar { padding: 0 16px; }
+  .topbar .search { display: none; }
+  .ws-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ws-title { font-size: 24px; }
+  .login-brand { display: none; }
+  .login-form-area { padding: 24px; }
+  .ws-tool-card { grid-template-columns: 1fr; }
+  .ws-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+}
+@media (max-width: 480px) {
+  .ws-stats { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -342,6 +388,7 @@ a:hover { text-decoration: underline; }
         <input type="text" placeholder="搜索钻孔、地层、数据表…" id="globalSearch">
       </div>
       <div class="user-area">
+        <div class="bell" title="切换深色/浅色" style="cursor:pointer;" onclick="toggleTheme()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 100 18 9 9 0 010-18z" stroke="currentColor" stroke-width="1.8"/></svg></div>
         <div class="bell"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6zM10 19a2.2 2.2 0 0 0 4 0" stroke="#787671" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
         <div class="avatar"><div class="av-img" id="avLetter">G</div><span id="userLabel">管理员</span></div>
       </div>
@@ -400,6 +447,19 @@ async function sha256(s){
 
 
 
+function toggleTheme(){
+  const root = document.documentElement;
+  const dark = root.getAttribute('data-theme') !== 'dark';
+  root.setAttribute('data-theme', dark ? 'dark' : '');
+  localStorage.setItem('lifan_theme', dark ? 'dark' : 'light');
+}
+(function(){
+  const t = localStorage.getItem('lifan_theme');
+  if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else if (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+})();
 function getToken(){ return localStorage.getItem('lifan_token') || ''; }
 function setToken(t){ if (t) localStorage.setItem('lifan_token', t); else localStorage.removeItem('lifan_token'); }
 const API_STATE = {
@@ -1302,6 +1362,27 @@ function wsReviewHoleQuery(zk){
     '&include_test=' + WS_SETTINGS.include_test;
 }
 
+function openColSettings(){
+  const all = (OData.columns || []).filter(c => c !== 'id');
+  if (!all.length) { showToast('当前表无列', 'err'); return; }
+  const hidden = OData.hiddenCols[OData.table] || {};
+  const html = '<div style="padding:16px 20px;max-height:60vh;overflow-y:auto;">' +
+    '<div style="font-size:13px;color:var(--slate);margin-bottom:10px;">选择 ' + escHtml(OData.table) + ' 显示的列</div>' +
+    all.map(c => '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" class="colchk" value="' + escAttr(c) + '"' + (!hidden[c] ? ' checked' : '') + '> ' + escHtml(COLUMN_CN[c] || c) + '</label>').join('') +
+    '</div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--hairline);">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="applyColSettings()">应用</button></div>';
+  openModal('列设置 · ' + (COLUMN_CN[OData.table] || OData.table), html);
+}
+function applyColSettings(){
+  const hidden = {};
+  document.querySelectorAll('.colchk').forEach(el => { if (!el.checked) hidden[el.value] = true; });
+  OData.hiddenCols[OData.table] = hidden;
+  closeModal();
+  loadOnlinePage(OData.page);
+}
+
 async function renderWorkspace(){
   const el = document.getElementById('content');
   if (!API_STATE.online || !API_STATE.dbId) {
@@ -1347,6 +1428,7 @@ async function renderWorkspace(){
         <div class="ws-toolbar">
           <div class="search-in" style="flex:1;max-width:280px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
           <button class="btn btn-secondary" style="padding:6px 14px;font-size:12.5px;" onclick="loadOnlinePage(1)">刷新</button>
+          <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="openColSettings()">列设置</button>
           <span style="font-size:11.5px;color:var(--muted);" id="wsCurTable"></span>
         </div>
         <div style="overflow-x:auto;min-height:300px;" id="onlineGrid"></div>
@@ -1960,7 +2042,7 @@ async function uploadMdbFile(){
 }
 
 
-const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', columns: [], total: 0, debounce: null };
+const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null };
 async function renderDataOnline(){
   if (!API_STATE.online || !API_STATE.dbId) return renderData();
   if (!API_STATE.tables) {
@@ -2050,9 +2132,9 @@ function renderOnlineRows(rows){
   OData.rowCache = {};
   const tbl = OData.table || '';
   const all = (OData.columns || []).filter(c => c !== 'id');
-  const cols = WS_COLS[tbl]
-    ? WS_COLS[tbl].filter(c => all.includes(c))
-    : all;
+  const hidden = OData.hiddenCols[tbl] || {};
+  const cols = (WS_COLS[tbl] ? WS_COLS[tbl].filter(c => all.includes(c)) : all)
+    .filter(c => !hidden[c]);
   const grid = document.getElementById('onlineGrid');
   const info = document.getElementById('onlinePgInfo');
   const totalPages = Math.max(1, Math.ceil(OData.total / OData.pageSize));
