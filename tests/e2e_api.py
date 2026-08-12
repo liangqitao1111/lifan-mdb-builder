@@ -25,6 +25,17 @@ import main as app_main  # noqa: E402
 
 client = TestClient(app_main.app)
 
+# 登录获取 token（后端鉴权）
+_login = client.post("/api/login", json={"username": "admin", "password": "admin"})
+assert _login.status_code == 200, f"登录失败: {_login.text[:200]}"
+TOKEN = _login.json()["token"]
+H = {"Authorization": "Bearer " + TOKEN}
+
+
+def req(method, path, **kw):
+    kw.setdefault("headers", H)
+    return getattr(client, method)(path, **kw)
+
 # fixture：真实库重建产物（85 表 / 408 孔），存在则用，否则用 sample
 FIXTURE_LZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "work", "dbs", "e2e_real.lz")
 SAMPLE_LZ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sample", "lizheng_review_sample.lz")
@@ -35,7 +46,7 @@ IS_REAL = os.path.exists(FIXTURE_LZ)
 @pytest.fixture(scope="module")
 def db_id():
     with open(UPLOAD_SRC, "rb") as f:
-        r = client.post("/api/upload", files={"file": (os.path.basename(UPLOAD_SRC), f, "application/octet-stream")})
+        r = req("post", "/api/upload", files={"file": (os.path.basename(UPLOAD_SRC), f, "application/octet-stream")})
     assert r.status_code == 200, f"上传失败: {r.text[:300]}"
     data = r.json()
     assert data.get("db_id")
@@ -44,21 +55,21 @@ def db_id():
 
 
 def test_health():
-    r = client.get("/api/health")
+    r = req("get", "/api/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
 
 
 def test_upload_tables(db_id):
-    r = client.get(f"/api/db/{db_id}/tables")
+    r = req("get", f"/api/db/{db_id}/tables")
     assert r.status_code == 200
     tables = r.json()["tables"]
     assert len(tables) > 0
 
 
 def test_table_read_paged(db_id):
-    t = "z_ZuanKong" if "z_ZuanKong" in client.get(f"/api/db/{db_id}/tables").json()["tables"] else "ZK"
-    r = client.get(f"/api/db/{db_id}/table/{t}?page=1&page_size=20")
+    t = "z_ZuanKong" if "z_ZuanKong" in req("get", f"/api/db/{db_id}/tables").json()["tables"] else "ZK"
+    r = req("get", f"/api/db/{db_id}/table/{t}?page=1&page_size=20")
     assert r.status_code == 200
     j = r.json()
     assert j["total"] > 0
@@ -66,7 +77,7 @@ def test_table_read_paged(db_id):
 
 
 def test_review_all(db_id):
-    r = client.post(f"/api/db/{db_id}/review", json={})
+    r = req("post", f"/api/db/{db_id}/review", json={})
     assert r.status_code == 200, r.text[:300]
     j = r.json()
     s = j["summary"]
@@ -79,37 +90,37 @@ def test_review_all(db_id):
 
 def test_review_single(db_id):
     # 取第一个有数据的孔
-    r = client.get(f"/api/db/{db_id}/table/z_ZuanKong?page_size=1")
+    r = req("get", f"/api/db/{db_id}/table/z_ZuanKong?page_size=1")
     if r.status_code != 200:
         pytest.skip("无 z_ZuanKong 表")
     zk = r.json()["rows"][0].get("ZKBH") or r.json()["rows"][0].get("钻孔编号")
-    rr = client.get(f"/api/db/{db_id}/review/{zk}")
+    rr = req("get", f"/api/db/{db_id}/review/{zk}")
     assert rr.status_code in (200, 404), rr.text[:200]
 
 
 def test_spt_scan(db_id):
-    r = client.post(f"/api/db/{db_id}/spt-scan", json={})
+    r = req("post", f"/api/db/{db_id}/spt-scan", json={})
     assert r.status_code == 200, r.text[:300]
     assert "suggestions" in r.json()
 
 
 def test_stats_karst(db_id):
-    r = client.post(f"/api/db/{db_id}/stats/karst?project_type=B", json={})
+    r = req("post", f"/api/db/{db_id}/stats/karst?project_type=B", json={})
     assert r.status_code == 200, r.text[:300]
     files = r.json().get("files") or []
     assert files, "岩溶统计未生成文件"
 
 
 def test_stats_soil(db_id):
-    r = client.post(f"/api/db/{db_id}/stats/soil?project_type=A", json={})
+    r = req("post", f"/api/db/{db_id}/stats/soil?project_type=A", json={})
     assert r.status_code == 200, r.text[:300]
     assert r.json().get("file")
 
 
 def test_stats_download(db_id):
-    r = client.post(f"/api/db/{db_id}/stats/soil?project_type=A", json={})
+    r = req("post", f"/api/db/{db_id}/stats/soil?project_type=A", json={})
     f = r.json()["file"]
-    d = client.get(f"/api/db/{db_id}/stats/download?file={f}")
+    d = req("get", f"/api/db/{db_id}/stats/download?file={f}")
     assert d.status_code == 200
     assert len(d.content) > 0
 
@@ -117,7 +128,7 @@ def test_stats_download(db_id):
 def test_crud_write_roundtrip(db_id):
     """在线 CRUD：修改一行 → 回读确认落库（写入链路核心）"""
     t = "z_ZuanKong"
-    r = client.get(f"/api/db/{db_id}/table/{t}?page_size=1")
+    r = req("get", f"/api/db/{db_id}/table/{t}?page_size=1")
     if r.status_code != 200:
         pytest.skip("无表")
     j = r.json()
@@ -130,14 +141,14 @@ def test_crud_write_roundtrip(db_id):
         pytest.skip("无 ZKSD 字段")
     old = row[field]
     new = float(old or 0) + 1.0
-    u = client.put(f"/api/db/{db_id}/table/{t}/{row_id}", json={"data": {field: new}})
+    u = req("put", f"/api/db/{db_id}/table/{t}/{row_id}", json={"data": {field: new}})
     assert u.status_code == 200, u.text[:200]
-    r2 = client.get(f"/api/db/{db_id}/table/{t}?page=1&page_size=200")
+    r2 = req("get", f"/api/db/{db_id}/table/{t}?page=1&page_size=200")
     updated = next((x for x in r2.json()["rows"] if x.get("id") == row_id), None)
     assert updated is not None, "修改后行未找到"
     assert abs(float(updated[field]) - new) < 1e-6, f"回读不一致: {updated[field]} vs {new}"
     # 恢复原值（测试不污染 fixture 库）
-    client.put(f"/api/db/{db_id}/table/{t}/{row_id}", json={"data": {field: old}})
+    req("put", f"/api/db/{db_id}/table/{t}/{row_id}", json={"data": {field: old}})
 
 
 def test_desktop_consistency():
@@ -161,43 +172,43 @@ if __name__ == "__main__":
 
 def test_dxf_profile(db_id):
     """纵断面 DXF 生成 + 下载"""
-    r = client.post(f"/api/db/{db_id}/dxf/profile?holes=26-ZD-GZXT-0-1,26-ZD-GZXT-0-2&h_scale=500&v_scale=500", json={})
+    r = req("post", f"/api/db/{db_id}/dxf/profile?holes=26-ZD-GZXT-0-1,26-ZD-GZXT-0-2&h_scale=500&v_scale=500", json={})
     if r.status_code == 400:
         pytest.skip("钻孔编号不适用于该库")
     assert r.status_code == 200, r.text[:300]
     j = r.json()
     assert j.get("file", "").endswith(".dxf")
-    d = client.get(f"/api/db/{db_id}/dxf/download?file={j['file']}")
+    d = req("get", f"/api/db/{db_id}/dxf/download?file={j['file']}")
     assert d.status_code == 200
     assert d.content[:6] in (b"0\nSEC", b"0\r\nSEC", b"0\nSECT") or len(d.content) > 1000
 
 
 def test_dxf_columns(db_id):
-    r = client.post(f"/api/db/{db_id}/dxf/columns", json={})
+    r = req("post", f"/api/db/{db_id}/dxf/columns", json={})
     assert r.status_code == 200, r.text[:300]
     assert r.json().get("file", "").endswith(".dxf")
 
 
 def test_config_get_put(db_id):
     """参数中心：读取 TOML → 原样保存（备份 + 校验）"""
-    g = client.get(f"/api/db/{db_id}/config")
+    g = req("get", f"/api/db/{db_id}/config")
     assert g.status_code == 200
     raw = g.json()["raw_text"]
     assert len(raw) > 500
     assert "公用" in raw
     # 非法 TOML 拒绝
-    bad = client.put(f"/api/db/{db_id}/config", json={"raw_text": "not = = valid toml"})
+    bad = req("put", f"/api/db/{db_id}/config", json={"raw_text": "not = = valid toml"})
     assert bad.status_code == 422, "非法 TOML 应拒绝"
     # 原样回写
-    good = client.put(f"/api/db/{db_id}/config", json={"raw_text": raw})
+    good = req("put", f"/api/db/{db_id}/config", json={"raw_text": raw})
     assert good.status_code == 200, good.text[:200]
     assert good.json()["ok"]
 
 
 def test_review_include_test(db_id):
     """复核设置口径：include_test 开关影响问题数（与桌面端 enable_test_review 一致）"""
-    off = client.post(f"/api/db/{db_id}/review?include_test=false&project_type=B", json={})
-    on = client.post(f"/api/db/{db_id}/review?include_test=true&project_type=B", json={})
+    off = req("post", f"/api/db/{db_id}/review?include_test=false&project_type=B", json={})
+    on = req("post", f"/api/db/{db_id}/review?include_test=true&project_type=B", json={})
     assert off.status_code == 200 and on.status_code == 200
     t_off, t_on = off.json()["summary"]["total"], on.json()["summary"]["total"]
     assert t_off >= 0 and t_on >= t_off, f"含土工判别问题数应≥不含土工: {t_on} vs {t_off}"

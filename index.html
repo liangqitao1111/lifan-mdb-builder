@@ -399,6 +399,9 @@ async function sha256(s){
 }
 
 
+
+function getToken(){ return localStorage.getItem('lifan_token') || ''; }
+function setToken(t){ if (t) localStorage.setItem('lifan_token', t); else localStorage.removeItem('lifan_token'); }
 const API_STATE = {
   online: false,        // 后端 /api 可达
   checked: false,       // 已完成健康探测
@@ -442,9 +445,13 @@ async function apiFetch(path, options = {}){
   let res;
   try {
     const isForm = options.body instanceof FormData;
+    const t = getToken();
+    const headers = Object.assign({}, options.headers || {});
+    if (!isForm && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    if (t) headers['Authorization'] = 'Bearer ' + t;
     res = await fetch(url, {
       method: options.method || 'GET',
-      headers: isForm ? (options.headers || {}) : { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      headers,
       body: options.body === undefined ? undefined : (isForm ? options.body : JSON.stringify(options.body)),
       signal: ctrl.signal,
     });
@@ -453,6 +460,15 @@ async function apiFetch(path, options = {}){
     if (!options.silent) showToast(msg, 'err');
     throw new ApiError(msg);
   } finally { clearTimeout(timer); }
+  if (res.status === 401) {
+    setToken('');
+    showToast('登录已过期，请重新登录', 'err');
+    const lp = document.getElementById('loginPage');
+    if (lp) { lp.style.display = 'flex'; }
+    const ap = document.getElementById('app');
+    if (ap) ap.classList.remove('show');
+    throw new ApiError('未登录或登录已过期', 401);
+  }
   if (!res.ok) {
     let msg = '请求失败（HTTP ' + res.status + '）';
     try {
@@ -561,19 +577,28 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
   const p = document.getElementById('loginPwd').value;
   const errEl = document.getElementById('loginErr');
   errEl.textContent = '';
-  const users = await dbAll('users');
-  const user = users.find(x => x.username === u);
-  if (!user || user.password_hash !== await sha256(p)) { errEl.textContent = '用户名或密码错误'; return; }
-  if (user.status !== 'active') { errEl.textContent = '账号已禁用，请联系管理员'; return; }
-  session = user;
-  session.last_login = new Date().toISOString();
-  await dbPut('users', session);
-  await dbPut('audit_logs', {user_id:session.id, action:'login', detail:`登录`, created_at:new Date().toISOString()});
-  document.getElementById('loginPage').style.display = 'none';
-  document.getElementById('app').classList.add('show');
-  document.getElementById('avLetter').textContent = (user.display_name||user.username)[0];
-  document.getElementById('userLabel').textContent = user.display_name || user.username;
-  route('mdb');
+  if (!u || !p) { errEl.textContent = '请输入用户名和密码'; return; }
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.token) { errEl.textContent = j.detail || '用户名或密码错误'; return; }
+    setToken(j.token);
+    session = { id: 1, username: u, display_name: u, role: 'admin' };
+    localStorage.setItem('lifan_session', JSON.stringify(session));
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('app').classList.add('show');
+    document.getElementById('avLetter').textContent = (u || 'A')[0];
+    document.getElementById('userLabel').textContent = u;
+    if (window.API_STATE) API_STATE.checked = false;
+    route('workspace');
+    detectBackend();
+  } catch (ex) {
+    errEl.textContent = '无法连接后端服务（' + (ex && ex.message || ex) + '）';
+  }
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -585,6 +610,11 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 
 const ROUTES = ['workspace','tools','build','config'];
 window.CURRENT_HOLE = '';
+(function(){
+  const s = localStorage.getItem('lifan_session');
+  if (s) { try { session = JSON.parse(s); } catch(e){} }
+})();
+
 function route(name){
   if (name === 'mdb' || name === 'data' || name === 'hub' || name === 'borehole') name = 'workspace';
   if (name === 'spt') name = 'tools';

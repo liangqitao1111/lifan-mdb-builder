@@ -44,6 +44,7 @@ except Exception:
 
 import db as wdb
 import review_api
+import auth
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "..", "work", "uploads")   # 上传原件（.mdb/.lz/.accdb）
@@ -62,6 +63,58 @@ app.add_middleware(
 
 # 复核/修正/统计 API（复用桌面版规则引擎）
 app.include_router(review_api.router)
+
+# ---------- 登录 ----------
+from pydantic import BaseModel as _BM
+
+
+class LoginPayload(_BM):
+    username: str = ""
+    password: str = ""
+
+
+@app.post("/api/login")
+def login(payload: LoginPayload):
+    token = auth.login(payload.username, payload.password)
+    if not token:
+        raise HTTPException(401, "用户名或密码错误")
+    return {"token": token, "user": payload.username.strip()}
+
+
+@app.post("/api/logout")
+def logout():
+    hdr = _bearer_token()
+    if hdr:
+        auth.logout(hdr)
+    return {"ok": True}
+
+
+# ---------- 鉴权中间件（拦 /api/*，放行 login/health/静态） ----------
+_PUBLIC_PATHS = ("/api/login", "/api/health")
+
+
+def _bearer_token():
+    from starlette.requests import Request
+    return None  # placeholder，中间件内直接读 header
+
+
+@app.middleware("http")
+async def auth_middleware(request, call_next):
+    from starlette.responses import JSONResponse
+    path = request.url.path
+    if not path.startswith("/api") or path in _PUBLIC_PATHS:
+        return await call_next(request)
+    auth_hdr = request.headers.get("Authorization", "")
+    token = auth_hdr[7:] if auth_hdr.startswith("Bearer ") else None
+    user = auth.check_token(token)
+    if not user:
+        return JSONResponse({"detail": "未登录或登录已过期"}, status_code=401)
+    response = await call_next(request)
+    try:
+        auth.audit(user, request.method, path, response.status_code)
+    except Exception:
+        pass
+    return response
 
 BUILD_OWNER_DEFAULT = "liangqitao1111"
 BUILD_REPO_DEFAULT = "lifan-mdb-builder"
