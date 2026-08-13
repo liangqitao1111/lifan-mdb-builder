@@ -1295,6 +1295,7 @@ async function jumpToIssue(card){
   }
 
   if (OData.table !== tab) wsSetTab(tab);
+  else { OData.orderBy = ''; OData.orderDir = ''; }  // 地层跳转须按 TCCDSD 行序（layer_index 口径），重置用户排序（v43）
   await loadOnlinePage(OData.page);
 
   const matchCol = { 'z_y_BiaoGuan':'BGDSD', 'z_y_DongTan':'DTDSD', 'z_c_QuYang':'QYBH', 'z_c_KeFen':'QYBH' }[tab] || '';

@@ -351,7 +351,14 @@ class RuleEngine:
                    'all_strata': strata, 'all_spt': spt_data}
 
             for rule in self._rules:
-                result = rule.check_fn(ctx)
+                try:
+                    result = rule.check_fn(ctx)
+                except Exception:
+                    # 单规则异常不中断整孔复核（v43）：记录日志并跳过该规则，
+                    # 避免异常数据导致全库复核 500
+                    get_logger().exception('规则 %s 执行异常（层号 %s，层索引 %s），已跳过',
+                                           rule.rule_id, layer.get('tczcbh', ''), i)
+                    continue
                 if result:
                     if isinstance(result, list):
                         issues.extend(result)
