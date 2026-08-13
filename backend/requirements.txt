@@ -6,3 +6,4 @@ pyodbc>=5.0               # Windows 读 .mdb（首选，需安装 Access Databas
 pypyodbc>=1.3.5           # pyodbc 不可用时的 ACE 后备（同一连接/类型码 API）
 pywin32>=306; platform_system == "Windows"   # ADOX.Catalog 表枚举后备（可选）
 # Linux 读 .mdb 依赖系统包：apt install mdbtools（无需 pip 包）
+ezdxf>=1.3   # DXF 成果导出（纵断面/柱状图）
