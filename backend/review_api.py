@@ -260,14 +260,14 @@ def dxf_profile(db_id: str, holes: str = "", h_scale: int = 500, v_scale: int = 
 
 
 @router.post("/dxf/columns")
-def dxf_columns(db_id: str, interval: int = 500, col_h: int = 15, col_w: int = 10):
-    """综合小柱状图 DXF（全部钻孔）"""
+def dxf_columns(db_id: str, interval: int = None, col_h: int = None, col_w: int = None):
+    """综合小柱状图 DXF（全部钻孔）；未传参数时用 TOML「DXF_小柱状图」默认值"""
     path = _resolve_db_path(db_id)
     da = _get_da(path)
     out = os.path.join(_dxf_dir(db_id), f"columns_{db_id}.dxf")
     try:
         from review.column_dxf import generate_columns
-        placed, msg = generate_columns(da, out, interval, col_h, col_w)
+        placed, msg = generate_columns(da, out, interval, col_h, col_w)  # None → 函数内读 TOML
         return {"ok": True, "file": os.path.basename(out), "placed": placed, "msg": msg,
                 "download": f"/api/db/{db_id}/dxf/download?file=" + os.path.basename(out)}
     except Exception as e:
@@ -296,8 +296,9 @@ def _config_path():
 
 
 @router.get("/config")
-def get_config(db_id: str):
-    """读取工程配置.toml：返回原始文本 + 结构概览（段落/键数）"""
+def get_config(db_id: str, include_dxf: bool = False):
+    """读取工程配置.toml：返回原始文本 + 结构概览（段落/键数）。
+    include_dxf=True 时保留 DXF 图形参数段（工具页「修正与成果」内嵌表单读取）。"""
     p = _config_path()
     if not os.path.exists(p):
         raise HTTPException(404, f"配置文件不存在: {p}")
@@ -307,6 +308,10 @@ def get_config(db_id: str):
     try:
         import tomllib
         data = tomllib.loads(raw)
+        # DXF 图形参数已移入「修正与成果」页对应卡片（纵断面/小柱状图），参数中心不再展示
+        if not include_dxf:
+            for _k in ('DXF_小柱状图', 'DXF_纵断面'):
+                data.pop(_k, None)
         structured = data
         overview = {k: (len(v) if isinstance(v, dict) else type(v).__name__) for k, v in data.items()}
     except Exception as e:

@@ -67,6 +67,17 @@ def generate_profile(da, zkbh_list, output_path, group_interval=3,
     if not zkbh_list:
         raise ValueError(" 钻孔列表为空")
 
+    # 每次生成时重读 TOML「DXF_纵断面」（改参数即时生效）
+    global OFFSET, CAVE_WING, CAVE_GAP, TEXT_OFFSET, TEXT_HEIGHT, N_SEG, CAVE_LTYPE
+    _pf_cfg = load_project_config().get('DXF_纵断面', {})
+    OFFSET = float(_pf_cfg.get('贴块偏移', OFFSET))
+    CAVE_WING = float(_pf_cfg.get('溶洞翼展', CAVE_WING))
+    CAVE_GAP = float(_pf_cfg.get('溶洞间隙', CAVE_GAP))
+    TEXT_OFFSET = float(_pf_cfg.get('文字偏移', TEXT_OFFSET))
+    TEXT_HEIGHT = float(_pf_cfg.get('文字高度', TEXT_HEIGHT))
+    N_SEG = int(_pf_cfg.get('溶洞分段数', N_SEG))
+    CAVE_LTYPE = str(_pf_cfg.get('溶洞线型名', CAVE_LTYPE))
+
     # ---- 1. 加载数据 ----
     all_bh = {b['zkbh']: b for b in da.get_all_boreholes() if b['zkbh'] in zkbh_list}
     ordered = sorted(zkbh_list, key=lambda z: all_bh.get(z, {}).get('zklc', 0) or 0)

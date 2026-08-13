@@ -339,14 +339,27 @@ def _draw_column(msp, ox, aggregated, interval_start, interval_end, total_bhs,
 # 主入口
 # ---------------------------------------------------------------------------
 
-def generate_columns(da, output_path: str, interval: int = INTERVAL,
+def generate_columns(da, output_path: str, interval: int = None,
                      col_height: float = None, col_width: float = None) -> Tuple[int, str]:
-    """生成小柱状图 DXF，col_height/col_width 为自定义柱尺寸(mm)，默认用模块常量"""
-    global COL_HEIGHT, COL_WIDTH, DEPTH_SCALE
+    """生成小柱状图 DXF，col_height/col_width 为自定义柱尺寸(mm)。
+    参数优先取调用值；未传时每次运行时读取 TOML「DXF_小柱状图」（改参数即时生效）。"""
+    global COL_HEIGHT, COL_WIDTH, DEPTH_SCALE, INTERVAL, MAX_DEPTH, SPACING, \
+        MIN_THICKNESS, MIN_SAMPLE_THICKNESS, STRATA_NAME_MAP
+    _cfg = load_project_config().get('DXF_小柱状图', {})
+    INTERVAL = int(_cfg.get('里程间隔', INTERVAL))
+    MAX_DEPTH = float(_cfg.get('最大深度', MAX_DEPTH))
+    COL_WIDTH = int(_cfg.get('柱宽', COL_WIDTH))
+    COL_HEIGHT = int(_cfg.get('柱高', COL_HEIGHT))
+    SPACING = int(_cfg.get('水平间距', SPACING))
+    MIN_THICKNESS = float(_cfg.get('最小厚度', MIN_THICKNESS))
+    MIN_SAMPLE_THICKNESS = float(_cfg.get('最小样本厚度', MIN_SAMPLE_THICKNESS))
+    STRATA_NAME_MAP = _cfg.get('岩土名称简化', STRATA_NAME_MAP)
     if col_height is not None:
         COL_HEIGHT = col_height
     if col_width is not None:
         COL_WIDTH = col_width
+    if interval is None:
+        interval = INTERVAL
     DEPTH_SCALE = COL_HEIGHT / MAX_DEPTH
     try:
         bhs = _load_boreholes(da)

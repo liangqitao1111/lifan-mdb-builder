@@ -1949,6 +1949,10 @@ async function toolsDxf(kind){
           <button class="btn btn-secondary" onclick="toolsDxfRun('columns')">生成全部柱状图</button>
           <span id="dxfStatus" style="font-size:12.5px;color:var(--steel);"></span>
         </div>
+        <div style="margin-top:14px;border-top:1px dashed var(--hairline);padding-top:10px;">
+          <div style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--primary);user-select:none;" onclick="toggleDxfParams(this)">⚙ 参数设置（贴块偏移/溶洞翼展/文字高度等）</div>
+          <div id="dxfParams" style="display:none;margin-top:6px;"></div>
+        </div>
       </div>`;
   } else {
     box.innerHTML = `
@@ -1956,8 +1960,67 @@ async function toolsDxf(kind){
         <div class="p-head" style="padding:0 0 12px;">导出综合小柱状图</div>
         <div style="font-size:13px;color:var(--slate);">为全部钻孔生成综合小柱状图 DXF（CAD 可编辑）。</div>
         <div style="margin-top:12px;"><button class="btn btn-primary" onclick="toolsDxfRun('columns')">生成柱状图</button><span id="dxfStatus" style="font-size:12.5px;color:var(--steel);margin-left:10px;"></span></div>
+        <div style="margin-top:14px;border-top:1px dashed var(--hairline);padding-top:10px;">
+          <div style="cursor:pointer;font-size:12.5px;font-weight:600;color:var(--primary);user-select:none;" onclick="toggleDxfParams(this)">⚙ 参数设置（里程间隔/柱宽/柱高/最小厚度等）</div>
+          <div id="dxfParams" style="display:none;margin-top:6px;"></div>
+        </div>
       </div>`;
   }
+}
+
+function toggleDxfParams(head){
+  const box = head.nextElementSibling;
+  if (!box) return;
+  const show = box.style.display === 'none';
+  box.style.display = show ? '' : 'none';
+  if (show && !box.dataset.loaded) {
+    box.dataset.loaded = '1';
+    // 根据当前卡片判定所属参数段：纵断面卡片含 dxfHoles
+    const sec = document.getElementById('dxfHoles') ? 'DXF_纵断面' : 'DXF_小柱状图';
+    dxfLoadParams(sec, box);
+  }
+}
+async function dxfLoadParams(sec, box){
+  box.innerHTML = '<span style="font-size:12px;color:var(--steel);">加载参数…</span>';
+  try {
+    const g = await apiGet('/db/' + API_STATE.dbId + '/config?include_dxf=1', { timeout: 30000 });
+    const st = (g.structured || {})[sec];
+    if (!st) { box.innerHTML = '<span style="font-size:12px;color:var(--muted);">无参数配置</span>'; return; }
+    box.innerHTML = '<div class="cfg-body" style="padding:4px 0;">' + renderCfgSection(sec, st, sec) + '</div>';
+    // 内联表（岩土名称简化）不支持行级编辑：禁用并提示
+    box.querySelectorAll('[data-path*="岩土名称简化"]').forEach(el => {
+      el.disabled = true;
+      const card = el.closest('.cfg-card');
+      if (card) card.classList.add('ro');
+      el.title = '内联表参数暂不支持页面编辑（可手动修改 TOML）';
+    });
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:10px;';
+    bar.innerHTML = '<button class="btn btn-primary" style="padding:5px 14px;font-size:12px;" onclick="saveDxfParams()">保存参数</button>' +
+      '<span style="font-size:11.5px;color:var(--muted);">保存后下次生成立即生效</span>';
+    box.appendChild(bar);
+  } catch (e) {
+    box.innerHTML = '<span style="color:var(--error);font-size:12px;">参数加载失败：' + escHtml((e && e.message) || e) + '</span>';
+  }
+}
+async function saveDxfParams(){
+  const box = document.getElementById('dxfParams');
+  if (!box) return;
+  const updates = {};
+  box.querySelectorAll('[data-path]').forEach(el => {
+    if (el.disabled) return;
+    const path = el.dataset.path, type = el.dataset.type;
+    if (type === 'bool') updates[path] = el.checked;
+    else if (type === 'num') updates[path] = el.value === '' ? 0 : Number(el.value);
+    else if (type === 'arr') updates[path] = el.value.split(',').map(s => s.trim()).filter(Boolean).map(s => /^\d+(\.\d+)?$/.test(s) ? Number(s) : s);
+    else updates[path] = el.value;
+  });
+  if (!Object.keys(updates).length) { showToast('没有可保存的修改', 'info'); return; }
+  try {
+    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { updates });
+    const miss = (r.missing || []).length;
+    showToast('已保存 ' + (r.applied || 0) + ' 项 DXF 参数' + (miss ? '，未识别 ' + miss + ' 项' : ''), (r.applied || 0) ? 'info' : 'err');
+  } catch (e) { showToast('保存失败：' + ((e && e.message) || e), 'err'); }
 }
 
 async function toolsDxfRun(kind){
