@@ -126,7 +126,7 @@ def _collect_raw_samples(da, project_type):
                 if n_val and n_val>0 and not _is_reasonable_value('N',n_val):continue
                 if n_val and n_val>0 and raw_state:
                     if raw_state in PLASTICITY_ORDER:
-                        if spt_to_plasticity(n_val,project_type,'不限制')!=raw_state:continue  # 浮点直判（修正击数可为小数）
+                        if spt_to_plasticity(n_val,project_type,'不限制')!=raw_state:continue  # 浮点直判（修正击数可为小数；None=空隙跳过）
                     elif raw_state in DENSITY_ORDER:
                         st_d=spt_to_density(n_val)
                         if st_d is None or st_d!=raw_state:continue
@@ -134,7 +134,7 @@ def _collect_raw_samples(da, project_type):
                     # 状态缺失：按同编号最常见状态兜底
                     inferred = _inferred_state(cb, yb)
                     if inferred and inferred in PLASTICITY_ORDER:
-                        if spt_to_plasticity(n_val,project_type,'不限制')!=inferred:continue  # 浮点直判
+                        if spt_to_plasticity(n_val,project_type,'不限制')!=inferred:continue  # 浮点直判（None=空隙跳过）
                     elif inferred and inferred in DENSITY_ORDER:
                         st_d=spt_to_density(n_val)
                         if st_d is None or st_d!=inferred:continue
