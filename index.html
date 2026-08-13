@@ -1243,6 +1243,7 @@ function wsHoleItem(zk, info){
 }
 
 async function wsSelectHole(zk){
+  const seq = (WS._seq = (WS._seq || 0) + 1);  // 竞态防护：快速切换孔时丢弃过期复核结果（v45）
   WS.zkbh = zk;
   document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.dataset.zk === zk));
 
@@ -1251,6 +1252,7 @@ async function wsSelectHole(zk){
   if (box) box.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px;">加载 ' + escHtml(zk) + ' 复核结果…</div>';
   try {
     const r = await apiGet(wsReviewHoleQuery(zk));
+    if (seq !== WS._seq) return;  // 过期请求丢弃
     const issues = r.issues || [];
     if (cnt) cnt.textContent = issues.length + ' 项';
     if (box) {
@@ -1265,10 +1267,12 @@ async function wsSelectHole(zk){
         || '<div style="padding:20px;color:var(--success);font-size:13px;">✓ 本孔复核通过</div>';
     }
   } catch (e) {
+    if (seq !== WS._seq) return;
     if (box) box.innerHTML = '<div style="padding:20px;color:var(--error);font-size:13px;">加载失败：' + escHtml((e && e.message) || e) + '</div>';
   }
 
   if (!API_STATE.tables) await wsInitTables();
+  if (seq !== WS._seq) return;
   wsSetTab('z_g_TuCeng');
 }
 
@@ -1916,6 +1920,7 @@ async function loadOnlinePage(page){
         + '?page=' + OData.page + '&page_size=' + OData.pageSize;
   if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol) + '&exact=' + (OData.exact ? '1' : '0');
   if (OData.orderBy) q += '&order_by=' + encodeURIComponent(OData.orderBy) + '&order_dir=' + encodeURIComponent(OData.orderDir || 'asc');
+  const seq = (OData._seq = (OData._seq || 0) + 1);  // 竞态防护：只渲染最新请求（v45）
   const info = document.getElementById('onlinePgInfo');
   const grid = document.getElementById('onlineGrid');
   if (info) info.textContent = '查询中…';
@@ -1935,11 +1940,13 @@ async function loadOnlinePage(page){
   }
   try {
     const r = await apiGet(q);
+    if (seq !== OData._seq) return;  // 过期请求丢弃
     OData.columns = r.columns || [];
     OData.total = r.total || 0;
     renderOnlineRows(r.rows || [], r);
     if (grid) grid.dataset.loaded = '1';
   } catch (e) {
+    if (seq !== OData._seq) return;
     if (info) info.textContent = '查询失败：' + escHtml(e.message);
     const sk = document.getElementById('onlineSkeleton');
     if (sk) sk.remove();
