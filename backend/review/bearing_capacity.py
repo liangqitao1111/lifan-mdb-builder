@@ -451,8 +451,9 @@ def _compute_loess_new(wl_avg, e_avg, w_avg):
     # TOML「承载力计算.黄土液限分段」[28,32] 即块间边界（_loess_wl_thresholds），
     # 与 Excel 块结构不一致时以 Excel 为准（仅告警，不臆改行为）。
     wl_lo, wl_mid, wl_hi = 24, 28, 32
-    if list(_loess_wl_thresholds) != [wl_mid, wl_hi]:
-        _log.warning('黄土液限分段 TOML=%r 与 Excel 新黄土块 WL=24/28/32 不一致，按 Excel 块结构内插', _loess_wl_thresholds)
+    _wl_thresholds = load_project_config().get('承载力计算', {}).get('黄土液限分段', [28, 32])
+    if list(_wl_thresholds) != [wl_mid, wl_hi]:
+        _log.warning('黄土液限分段 TOML=%r 与 Excel 新黄土块 WL=24/28/32 不一致，按 Excel 块结构内插', _wl_thresholds)
     v24 = _interp_2d(e_avg, w_avg, t['e'], t['w24'], t['m24'])
     v28 = _interp_2d(e_avg, w_avg, t['e'], t['w28'], t['m28'])
     v32 = _interp_2d(e_avg, w_avg, t['e'], t['w32'], t['m32'])
@@ -468,14 +469,16 @@ def _compute_loess_new(wl_avg, e_avg, w_avg):
 
 
 def _compute_loess_old(e_avg, w_over_wl):
-    """老黄土：e × W/WL 离散查表 — 数据实时读取 Excel"""
+    """老黄土：e × W/WL 离散查表 — 数据实时读取 Excel
+    分段阈值每次运行时读 TOML「承载力计算.老黄土e分段」（参数中心修改即时生效）"""
     tbl = _load_lookup_from_excel()
     if not tbl: return 0
     m = tbl['loess_old']['matrix']
-    if e_avg < _loess_old_e_thresholds[0]:     e_idx = 0
-    elif e_avg <= _loess_old_e_thresholds[1]:  e_idx = 1
-    elif e_avg <= _loess_old_e_thresholds[2]:  e_idx = 2
-    else:                                      e_idx = 3
+    _thresholds = load_project_config().get('承载力计算', {}).get('老黄土e分段', [0.7, 0.8, 0.9])
+    if e_avg < _thresholds[0]:     e_idx = 0
+    elif e_avg <= _thresholds[1]:  e_idx = 1
+    elif e_avg <= _thresholds[2]:  e_idx = 2
+    else:                          e_idx = 3
     if w_over_wl < 0.6:       r_idx = 0
     elif w_over_wl <= 0.8:    r_idx = 1
     else:                     r_idx = 2
