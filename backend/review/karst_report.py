@@ -240,9 +240,15 @@ def judge_development(line_rate_pct, cave_hole_rate_pct):
       - 中等发育：线岩溶率 ≥5 或 见洞隙率 ≥15
       - 弱发育：两者均低于弱发育下限（线 <5 且 见洞 <15）
     """
-    if line_rate_pct > _LINE_MEDIUM or cave_hole_rate_pct > _AREA_MEDIUM:
+    # 阈值每次运行时读 TOML「岩溶统计」（参数中心修改即时生效，v42）
+    _cfg = load_project_config().get('岩溶统计', {})
+    _line_weak = float(_cfg.get('线岩溶率_弱发育', 5))
+    _line_med = float(_cfg.get('线岩溶率_中等发育', 20))
+    _area_weak = float(_cfg.get('见洞隙率_弱发育', 15))
+    _area_med = float(_cfg.get('见洞隙率_中等发育', 45))
+    if line_rate_pct > _line_med or cave_hole_rate_pct > _area_med:
         return '岩溶强烈发育'
-    if line_rate_pct >= _LINE_WEAK or cave_hole_rate_pct >= _AREA_WEAK:
+    if line_rate_pct >= _line_weak or cave_hole_rate_pct >= _area_weak:
         return '岩溶中等发育'
     return '岩溶弱发育'
 

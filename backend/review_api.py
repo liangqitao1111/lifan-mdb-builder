@@ -368,12 +368,16 @@ def put_config(db_id: str, payload: dict):
             import shutil
             shutil.copy2(p, p + ".bak")
             tf.save(p)
-            # 清 config 缓存
-            try:
-                import review.config as rcfg
-                rcfg._PROJECT_CONFIG = None
-            except Exception:
-                pass
+            # 清 config 缓存（重要：config 与 review.config 可能是两个模块对象，
+            # 规则引擎等用顶层 config，双清避免保存后不生效——v42 修复）
+            import sys as _sys
+            for _m in ('config', 'review.config'):
+                _mod = _sys.modules.get(_m)
+                if _mod is not None:
+                    try:
+                        _mod._PROJECT_CONFIG = None
+                    except Exception:
+                        pass
             return {"ok": True, "applied": ok,
                     "missing": missing[:20] if missing else None,
                     "backup": os.path.basename(p) + ".bak"}
@@ -411,12 +415,15 @@ def put_config(db_id: str, payload: dict):
                 g.write(f.read())
         with open(p, "w", encoding="utf-8") as f:
             f.write(raw)
-        # 清空 config 缓存，使下次复核使用新参数
-        try:
-            import review.config as rcfg
-            rcfg._PROJECT_CONFIG = None
-        except Exception:
-            pass
+        # 清空 config 缓存，使下次复核使用新参数（config 与 review.config 双清，v42）
+        import sys as _sys
+        for _m in ('config', 'review.config'):
+            _mod = _sys.modules.get(_m)
+            if _mod is not None:
+                try:
+                    _mod._PROJECT_CONFIG = None
+                except Exception:
+                    pass
         return {"ok": True, "size": len(raw), "backup": os.path.basename(p) + ".bak"}
     except Exception as e:
         raise HTTPException(500, f"保存失败: {e}")
