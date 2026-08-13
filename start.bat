@@ -1,6 +1,12 @@
 @echo off
 chcp 65001 >nul
 rem 理反 Web 一键启动（Windows）
+rem 生成 MDB 功能需要 GH_TOKEN（GitHub PAT，Actions+Contents 权限）：
+rem   方式一：系统环境变量设置 GH_TOKEN（start.bat 启动的进程自动继承）
+rem   方式二：仓库根目录放 .gh_token 文件（内容为 token，已 gitignore）
+if not defined GH_TOKEN (
+  if exist .gh_token set /p GH_TOKEN=<.gh_token
+)
 cd /d "%~dp0"
 rem 优先使用 WorkBuddy 托管环境（已装 uvicorn）；不存在则回退系统 python
 set "PY=C:\Users\神舟\.workbuddy\binaries\python\envs\default\Scripts\python.exe"

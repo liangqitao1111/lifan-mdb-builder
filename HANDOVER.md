@@ -208,3 +208,17 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 
 ---
 *交接完毕：v1~v32 改动已归档；5 个文件待提交；本地服务已运行最新代码。*
+
+## 11. 生成 MDB 功能配置（GH_TOKEN）
+- 后端 build API 需要环境变量 `GH_TOKEN`（GitHub PAT，需 Actions: Read/Write + Contents: Read/Write，仓库 lifan-mdb-builder）
+- 配置方式（任选其一）：
+  1. 系统环境变量设置 `GH_TOKEN`（start.bat 启动的 uvicorn 自动继承）
+  2. 仓库根目录放 `.gh_token` 文件（内容为 token，已加入 .gitignore）
+- 未配置时触发构建返回 500（前端有明确提示，不会静默失败）
+- 注意：GitHub Actions 每次构建会向仓库 `payload/{db_id}/` 提交 work.db + schema.json（约 2MB/次），历史产物会堆积仓库体积——如需清理可在 workflow 完成后删除该目录（当前保留不影响功能）
+
+## 12. 复核目标完成状态（v34→v46）
+- 全部功能运行验证通过（含生成 MDB 全链路：触发→Actions→产物→verify_mdb 85 表 11356 行一致）
+- 446 个 TOML 参数全审计；修复 14 项 bug；桌面 8 项 IDENTICAL；死代码清理 1060 行
+- 全套回归：pytest 17 passed + E2E 7 套全绿
+- 剩余可选：真实项目库复测（需用户提供 .lz/.mdb）

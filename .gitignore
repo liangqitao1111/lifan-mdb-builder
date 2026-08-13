@@ -20,3 +20,6 @@ lizheng_review.log
 screenshots/
 *.log
 
+
+# GitHub PAT（生成 MDB 用，勿入库）
+.gh_token
