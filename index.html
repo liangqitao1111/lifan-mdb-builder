@@ -1809,6 +1809,11 @@ async function renderTools(){
         <div class="d">SPT 杆长/击数修正建议扫描（只读，建议值可在工作台编辑应用）</div>
         <span class="a">查看建议 →</span>
       </div>
+      <div class="card" onclick="toolsDpt()">
+        <div class="t">动探杆长修正</div>
+        <div class="d">按 GB50021 表B.0.1 对单孔重型动探（N63.5）计算并写回修正值 DTXZJS</div>
+        <span class="a">单孔修正 →</span>
+      </div>
       <div class="card" onclick="toolsIssues()">
         <div class="t">导出复核问题清单</div>
         <div class="d">全库复核问题导出为 xlsx（规则/级别/位置/说明）</div>
@@ -1910,6 +1915,40 @@ async function toolsSptApply(){
     showToast('已应用 ' + (r.updated || 0) + ' / ' + items.length + ' 条', r.updated ? 'info' : 'err');
     toolsSpt();
   } catch (e) { showToast('应用失败：' + ((e && e.message) || e), 'err'); }
+}
+
+async function toolsDpt(){
+  const box = document.getElementById('toolsResult');
+  if (!box) return;
+  box.innerHTML = `
+    <div class="ws-panel" style="padding:18px;">
+      <div class="p-head" style="padding:0 0 12px;">动探杆长修正</div>
+      <div style="font-size:12.5px;color:var(--slate);line-height:1.6;margin-bottom:10px;">按 GB50021-2001 表B.0.1 对<b>重型动探（N63.5）</b>进行杆长修正（仅 DTLX=重型参与；轻型/超重型跳过）。修正值写回工作库 DTXZJS 列，可在数据工作台「动探」页签查看。</div>
+      <input id="dptHole" placeholder="钻孔编号，如 26-ZD-GZXT-0-1" style="width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;font-size:13px;box-sizing:border-box;">
+      <div style="display:flex;gap:10px;margin-top:12px;align-items:center;">
+        <button class="btn btn-primary" onclick="toolsDptRun()">修正并写回</button>
+        <span id="dptStatus" style="font-size:12.5px;color:var(--steel);"></span>
+      </div>
+    </div>`;
+}
+async function toolsDptRun(){
+  const st = document.getElementById('dptStatus');
+  const inp = document.getElementById('dptHole');
+  const zk = (inp && inp.value || '').trim();
+  if (!zk) { showToast('请输入钻孔编号', 'err'); return; }
+  if (st) { st.textContent = '修正中…'; st.style.color = 'var(--steel)'; }
+  try {
+    const r = await apiPost('/db/' + API_STATE.dbId + '/dpt-correct', {
+      zkbh: zk, project_type: (WS_SETTINGS && WS_SETTINGS.project_type) || 'B'
+    });
+    if (st) {
+      st.textContent = '✓ 已修正 ' + (r.updated || 0) + ' 条（重型动探）';
+      st.style.color = 'var(--success)';
+    }
+    showToast('动探修正完成：' + (r.updated || 0) + ' 条', r.updated ? 'info' : 'ok');
+  } catch (e) {
+    if (st) { st.textContent = '✗ 修正失败：' + ((e && e.message) || e); st.style.color = 'var(--error)'; }
+  }
 }
 
 function sptEditN(el){
@@ -2053,6 +2092,7 @@ async function renderConfig(){
   el.innerHTML = '<h1 class="page-title">参数中心</h1><p class="page-sub">加载工程配置…</p><div style="padding:40px;text-align:center;color:var(--slate);">读取中…</div>';
   try {
     const g = await apiGet('/db/' + API_STATE.dbId + '/config', { timeout: 30000 });
+    window.DEAD_KEYS = g.dead_keys || [];
     if (!g.structured || !Object.keys(g.structured).length) {
       el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">配置解析失败：请检查 参数/工程配置.toml</div>';
       return;
@@ -2160,6 +2200,12 @@ function cfgRow(key, v, ro){
   }
 
   const label = key.split('.').pop();
+  // 死参数标注：代码未消费的配置（Web 端无引用）→ 置灰 + 提示
+  const isDead = (window.DEAD_KEYS || []).some(dk => key === dk || key.startsWith(dk + '.'));
+  if (isDead) {
+    return '<div class="cfg-card ro" style="opacity:.6;"><span class="cfg-label" title="' + escAttr(key) + '">' + escHtml(label) + ' <span style="color:var(--warning);font-size:11px;font-weight:400;">（未使用）</span></span>' +
+      '<span style="font-size:11px;color:var(--muted);">Web 端未消费该参数</span></div>';
+  }
   const isNote = label === '用途' || label.endsWith('说明') || label === '用途说明';
   if (isNote) {
     return '<div class="cfg-note"><div class="cfg-label">' + escHtml(label) + '</div>' +

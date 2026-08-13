@@ -295,6 +295,15 @@ def _config_path():
     return os.path.join(root, "参数", "工程配置.toml")
 
 
+# 参数中心中「代码未消费」的参数（Web 端无引用；保留数据但标注，避免用户误改）
+_DEAD_CONFIG_KEYS = [
+    "CAD复核",               # Web 未实现 CAD 复核（桌面版 dxf_depth_check 使用）
+    "岩溶统计.洞高标签",      # 标签由「洞高阈值」动态生成，配置数组未消费
+    "岩溶统计.埋深标签",      # 同上
+    "岩溶_关键词.有效填充物",  # 填充物判定仅消费 无效填充物/跳过词/跳过前缀
+]
+
+
 @router.get("/config")
 def get_config(db_id: str, include_dxf: bool = False):
     """读取工程配置.toml：返回原始文本 + 结构概览（段落/键数）。
@@ -317,7 +326,8 @@ def get_config(db_id: str, include_dxf: bool = False):
     except Exception as e:
         overview = {"解析失败": str(e)}
     return {"path": p, "size": len(raw), "raw_text": raw,
-            "structured": structured, "overview": overview}
+            "structured": structured, "overview": overview,
+            "dead_keys": _DEAD_CONFIG_KEYS}
 
 
 @router.put("/config")

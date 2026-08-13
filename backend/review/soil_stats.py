@@ -703,7 +703,7 @@ def collect_stratum_statistics(
                         # 塑性判定统一浮点直判（修正击数可为小数，与 rule_engine 同口径；
                         # N_corr∈(15,16)/(20,21) 不再被 int() 截断造成两模块状态不一致）
                         spt_state = spt_to_plasticity(n_val, project_type, '不限制')
-                        if spt_state != raw_state:
+                        if spt_state is None or spt_state != raw_state:
                             continue
                     elif raw_state in DENSITY_ORDER:
                         # 密实度：用 spt_to_density 判断（修正击数可为小数，区间连续无空隙）
@@ -716,7 +716,7 @@ def collect_stratum_statistics(
                     if inferred and inferred in PLASTICITY_ORDER:
                         # 同上：浮点直判（不 int() 截断）
                         spt_state = spt_to_plasticity(n_val, project_type, '不限制')
-                        if spt_state != inferred:
+                        if spt_state is None or spt_state != inferred:
                             continue
                     elif inferred and inferred in DENSITY_ORDER:
                         spt_state = spt_to_density(n_val)

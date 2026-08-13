@@ -864,14 +864,14 @@ def spt_to_plasticity(n: float, proj_type: str = 'A', max_plasticity: str = None
     """
     mp = SPT_PLASTICITY_A if proj_type == 'A' else SPT_PLASTICITY_B
     eps = IL_EPSILON
-    state = '坚硬'
     for lo, hi, d in mp:
         if lo - eps < n <= hi + eps:
-            state = d
-            break
-    if max_plasticity and PLASTICITY_ORDER.get(state, 0) > PLASTICITY_ORDER.get(max_plasticity, 99):
-        return max_plasticity
-    return state
+            if max_plasticity and PLASTICITY_ORDER.get(d, 0) > PLASTICITY_ORDER.get(max_plasticity, 99):
+                return max_plasticity
+            return d
+    # 区间键存在空隙（如 A类 整数边界 ≤3/4~7 的 3~4）：无命中返回 None，
+    # 由调用方跳过判定（对齐 spt_to_density V2.2.3 S6 口径，避免误判"坚硬"）
+    return None
 
 
 def spt_to_weathering(n: float, proj_type: str = 'A') -> str:
@@ -893,7 +893,8 @@ def spt_to_weathering(n: float, proj_type: str = 'A') -> str:
     for lo, hi, d in mp:
         if lo - eps < n <= hi + eps:
             return d
-    return '强风化'
+    # 区间无命中（配置空隙/异常值）返回 None，调用方跳过（防误判"强风化"）
+    return None
 
 
 def _coerce_spt_n(v):

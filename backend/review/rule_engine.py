@@ -610,6 +610,8 @@ class RuleEngine:
             if n <= 0:  # 空标贯（未录入），不参与可塑性对比
                 continue
             expected = spt_to_plasticity(n, self.project_type, self.max_plasticity)
+            if expected is None:  # 区间空隙（修正击数浮点）→ 不判定
+                continue
             if l['tcksx'] != expected:
                 issue = self._make_issue('R-DEN-007', 'H', ctx, 'TCKSX',
                     f'N={n}对应{expected}，当前可塑性为{l["tcksx"]}')
@@ -639,6 +641,8 @@ class RuleEngine:
             if n <= 0:  # 空标贯（未录入），不参与风化程度对比（同 R-DEN-001 防护）
                 continue
             expected = spt_to_weathering(n, self.project_type)
+            if expected is None:  # 区间空隙 → 不判定
+                continue
             if l['tcfhcd'] != expected:
                 issue = self._make_issue('R-DEN-008', 'H', ctx, 'TCFHCD',
                     f'N={n}对应{expected}，当前风化为{l["tcfhcd"]}')
@@ -761,7 +765,7 @@ class RuleEngine:
             std_pls = std.get('tcksx', '')
             if (lt in ('clay', 'muck') or l.get('tcfhcd', '') == '残积土') and std_pls:
                 n_state = spt_to_plasticity(n, self.project_type, self.max_plasticity)
-                if n_state != std_pls:
+                if n_state is None or n_state != std_pls:
                     issue = self._make_issue('R-CRS-012', 'M', ctx, 'BGJS',
                         f'N={n}→{n_state}，标准地层{key[0]}-{key[1]}应为"{std_pls}"')
                     issue.ref_value = spt.get('bgdsd', 0)
@@ -785,7 +789,7 @@ class RuleEngine:
             std_wea = std.get('tcfhcd', '')
             if l.get('tcfhcd', '') in ('全风化', '强风化') and std_wea:
                 n_state = spt_to_weathering(n, self.project_type)
-                if n_state != std_wea:
+                if n_state is None or n_state != std_wea:
                     issue = self._make_issue('R-CRS-012', 'M', ctx, 'BGJS',
                         f'N={n}→{n_state}，标准地层{key[0]}-{key[1]}应为"{std_wea}"')
                     issue.ref_value = spt.get('bgdsd', 0)
