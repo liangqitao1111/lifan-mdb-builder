@@ -2402,68 +2402,6 @@ async function uploadMdbFile(){
 }
 
 const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null, orderBy: '', orderDir: '', activeRow: -1, freeze: false };
-async function renderDataOnline(){
-  if (!API_STATE.online || !API_STATE.dbId) return renderData();
-  if (!API_STATE.tables) {
-    try {
-      const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables');
-      API_STATE.tables = {};
-      (r.tables || []).forEach(t => API_STATE.tables[t] = null);
-      saveApiState();
-    } catch (e) {
-      if (e.status === 404) { clearApiState(); showToast('在线库已失效，已切换本地模式', 'err'); }
-      return renderData();
-    }
-  }
-  const names = Object.keys(API_STATE.tables);
-  if (!OData.table || !names.includes(OData.table)) OData.table = names[0] || null;
-  if (!OData.table) { showToast('当前在线库没有任何表', 'err'); return; }
-  document.getElementById('content').innerHTML = `
-    <h1 class="page-title">数据管理 · 在线模式</h1>
-    <p class="page-sub">在线库 db_id=${API_STATE.dbId} · 选择表后分页浏览与编辑，改动实时写回服务端工作库</p>
-    <div class="toolbar">
-      <div class="tabs">
-        <select id="dataTableSel" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;background:#fff;min-width:220px;">
-          ${names.map(t => '<option value="' + escAttr(t) + '"' + (t === OData.table ? ' selected' : '') + '>' + escHtml(t) + '</option>').join('')}
-        </select>
-      </div>
-      <div class="t-tools" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <select id="onlineSearchCol" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;background:#fff;">
-          <option value="">全部列</option>
-        </select>
-        <div class="search-in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#787671" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#787671" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
-        <button class="btn btn-secondary" onclick="loadOnlinePage(1)">刷新</button>
-        ${can('data_edit') ? '<button class="btn btn-secondary" style="color:var(--primary);border-color:var(--primary);" onclick="openOnlineEdit(null)">+ 新增</button>' : ''}
-      </div>
-    </div>
-    <div class="table-card">
-      <div style="overflow-x:auto;" id="onlineGrid"></div>
-      <div class="pagination">
-        <span class="pg-info" id="onlinePgInfo">加载中…</span>
-        <select id="onlinePageSize" onchange="OData.pageSize=parseInt(this.value,10);OData.page=1;loadOnlinePage(1)">
-          <option value="20">20 条/页</option><option value="50" selected>50 条/页</option><option value="100">100 条/页</option><option value="200">200 条/页</option>
-        </select>
-        <button class="btn btn-secondary" id="onlinePrev" onclick="loadOnlinePage(OData.page-1)">上一页</button>
-        <button class="btn btn-secondary" id="onlineNext" onclick="loadOnlinePage(OData.page+1)">下一页</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('dataTableSel').addEventListener('change', e => {
-    OData.table = e.target.value; OData.page = 1; OData.keyword = ''; OData.searchCol = '';
-    const sc = document.getElementById('onlineSearchCol');
-    if (sc) sc.innerHTML = '<option value="">全部列</option>';
-    const si = document.getElementById('onlineSearch');
-    if (si) si.value = '';
-    loadOnlinePage(1);
-  });
-  const si = document.getElementById('onlineSearch');
-  si.addEventListener('input', e => {
-    clearTimeout(OData.debounce);
-    OData.debounce = setTimeout(() => { OData.keyword = e.target.value.trim(); OData.page = 1; loadOnlinePage(1); }, 500);
-  });
-  document.getElementById('onlineSearchCol').addEventListener('change', e => { OData.searchCol = e.target.value; OData.page = 1; loadOnlinePage(1); });
-  await loadOnlinePage(1);
-}
 
 async function loadOnlinePage(page){
   if (!API_STATE.online || !API_STATE.dbId || !OData.table) return;

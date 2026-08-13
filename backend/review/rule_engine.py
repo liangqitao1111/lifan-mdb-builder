@@ -777,9 +777,8 @@ class RuleEngine:
             if lt in ('sand', 'gravel') and std_dens:
                 n_dens = n
                 n_state = spt_to_density(n_dens)
-                if n_state is None:  # 区间外（配置异常）不判定
-                    continue
-                if n_state != std_dens:
+                if n_state is not None and n_state != std_dens:
+                    # 区间空隙（None）不判定，但不得跳过本条标贯的风化对照（V39）
                     issue = self._make_issue('R-CRS-012', 'M', ctx, 'BGJS',
                         f'N={n_dens}→{n_state}，标准地层{key[0]}-{key[1]}应为"{std_dens}"')
                     issue.ref_value = spt.get('bgdsd', 0)
