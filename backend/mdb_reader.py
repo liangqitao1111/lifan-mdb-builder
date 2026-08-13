@@ -306,15 +306,23 @@ class MdbReader:
 
     @staticmethod
     def _parse_csv_line(line):
+        """简单 CSV 行解析：支持带引号字段与转义引号（"" → 字面引号）"""
         out, cur, in_q = [], "", False
-        for ch in line:
+        i = 0
+        while i < len(line):
+            ch = line[i]
             if ch == '"':
+                if in_q and i + 1 < len(line) and line[i + 1] == '"':
+                    cur += '"'
+                    i += 2
+                    continue
                 in_q = not in_q
             elif ch == "," and not in_q:
                 out.append(cur.strip())
                 cur = ""
             else:
                 cur += ch
+            i += 1
         out.append(cur.strip())
         return out
 
