@@ -1,7 +1,7 @@
 # 理反 Web · 交接文档（HANDOVER）
 
-> 更新：2026-08-13 22:30 · 服务地址：http://127.0.0.1:8766/
-> 最新提交：见下方 git 历史（main，v38 已含 v1~v37）· 工作区无未提交代码改动
+> 更新：2026-08-14 00:20 · 服务地址：http://127.0.0.1:8766/
+> 最新提交：见下方 git 历史（main，v39 已含 v1~v38）· 工作区无未提交代码改动
 > 代码规模：`index.html` 2749 行（v31 清理后）/ 后端 FastAPI
 
 ---
@@ -88,6 +88,7 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 | **v35** | 参数中心移除冗余装饰点（字段•/子段横条/段标题色点），回归干净文字层级 |
 | **v36** | DXF 参数移入所属页面（纵断面/柱状图卡片内嵌参数设置，保存即生效）；生成时运行时读 TOML；API 默认值不覆盖配置 |
 | **v37** | 桌面版 vs Web 全量功能一致性验证（8 项 IDENTICAL，报告 docs/桌面一致性对比报告.md）；补 ezdxf 依赖 |
+| **v39** | **规则/数据层复核**：①R-CRS-012 密实度空隙不再跳过同条标贯风化对照（防御性）；②清理 renderDataOnline 死代码 62 行；③规则函数全量审查（R-PLS/R-CRS/R-GRS/R-DEN-010 正确）；④dao/sqlite_dao 字段映射与 SQL 适配审查通过（表名自动发现/TOP→LIMIT 翻译/AttrRow 大小写不敏感/每请求新建连接无跨线程问题）；⑤问题导出内容抽查（148 行=147 问题+表头、H/M 计数一致、自然排序） |
 | **v38** | **参数逐项复核**：①A类标贯N_可塑性区间空隙误判修复（浮点修正击数落入整数边界空隙→None 跳过，对齐 density 口径，测试库 119 条潜在误报消除；B类/风化无空隙不受影响）；②补动探杆长修正 UI（桌面版有 Web 缺失，GB50021 重型修正全链路验证 DTXZJS=14）；③参数中心死参数标注 10 处（CAD复核/手动修正范围4段/洞高标签/埋深标签/有效填充物 标"未使用"防误改）；④复核设置 4 参数组合验证（include_test/use_std_stratum/max_plasticity/project_type 全部正确生效）；⑤边界测试（page 负数/超大 page_size 钳制 200/通配符%） |
 
 ## 4. 当前功能清单（v32 状态）
@@ -202,7 +203,7 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 4. ~~可塑性条目（R-DEN-007）的状态写回~~ ✅ **v33 已完成**：前端展示+确认文案+一键应用写回 TCKSX（后端定位深度所在层）。
 5. ~~地层列设置"岩土名称"出现 2 次~~ ✅ **v33 已完成**：TCYMC 显示「岩土名称（TCYMC）」默认不勾选。
 6. `renderReview/renderBorehole/renderSpt` 已删除（v31）——若未来需要独立复核/标贯页，需基于 renderTools/renderWorkspace 重建。
-7. **v34 复核后遗留（低危，可后续处理）**：review_strata 规则无 per-rule 异常保护（单规则异常中断整孔复核）；inlineEdit 的 idJs 主键若含引号可注入 onclick（文本主键场景）；CORS `*`/上传无大小限制/token 内存表（部署公网前需收紧）；renderDataOnline 为 v31 清理遗漏的死代码（不可达）；jumpToIssue 在用户自定义排序后行索引可能错位。
+7. **复核后遗留（低危，可后续处理）**：review_strata 规则无 per-rule 异常保护（单规则异常中断整孔复核）；inlineEdit 的 idJs 主键若含引号可注入 onclick（文本主键场景）；CORS `*`/上传无大小限制/token 内存表（部署公网前需收紧）；jumpToIssue 在用户自定义排序后行索引可能错位；**剩余 5 个死渲染函数**（renderDashboard/Data/Export/Backup/Users，render 仅调度 workspace/tools/config/build，约 400 行可后续清理）。
 
 ---
 *交接完毕：v1~v32 改动已归档；5 个文件待提交；本地服务已运行最新代码。*
