@@ -14,6 +14,7 @@ import argparse
 import datetime
 import decimal
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -49,6 +50,10 @@ def extract_mdb(lz_path):
         if not names:
             sys.exit(f"✗ {lz_path} 内没有 .mdb 条目")
         target = next((n for n in names if "lzgicad1" in n.lower()), names[0])
+        # P2-3（安全）：目标条目路径穿越防护——拒绝 .. 段/绝对路径/盘符
+        norm_t = target.replace("\\", "/")
+        if norm_t.startswith("/") or ".." in norm_t.split("/") or (len(norm_t) >= 2 and norm_t[1] == ":"):
+            sys.exit(f"✗ artifact 含非法路径条目: {target}")
         tmpdir = tempfile.mkdtemp(prefix="lifan_verify_")
         z.extract(target, tmpdir)
     return os.path.join(tmpdir, target), tmpdir
@@ -130,16 +135,27 @@ def loose_eq(a, b):
 
 
 def _as_dt(v):
+    """字符串/日期 → datetime；仅接受完整日期格式（P2-1：修复前 fromisoformat
+    把 '2024'/'2024-02' 解析为 2024-01-01/2024-02-01，SQLite '2024' 与 MDB
+    '2024-01-01' 被误判相等——假一致）"""
     if isinstance(v, datetime.datetime):
         return v
     if isinstance(v, datetime.date):
         return datetime.datetime(v.year, v.month, v.day)
     if isinstance(v, str):
-        try:
-            return datetime.datetime.fromisoformat(v.strip().replace("Z", "+00:00"))
-        except ValueError:
-            return None
+        s = v.strip()
+        if len(s) >= 10 and re.match(r'^\d{4}-\d{2}-\d{2}', s):
+            try:
+                return datetime.datetime.fromisoformat(s[:19].replace('T', ' '))
+            except ValueError:
+                return None
     return None
+
+
+def _safe_sort_key(row):
+    """P1-1：排序键带类型前缀——修复前 TEXT 列混合 '2024-02-03' 与 '无' 时
+    归一化出 datetime 与 str 混排，sorted 比较抛 TypeError 使整个校验崩溃"""
+    return [(type(v).__name__, v) for v in row]
 
 
 # Access 无法对 MEMO / LONGBINARY（OLE 对象）排序 → 只按可排序列排序
@@ -199,8 +215,9 @@ def norm_row(row):
 def compare_multiset(srows, mrows, cmp_cols):
     """多集比对：两侧各自归一化 → Python 统一排序 → 逐条比较。
     天然无序（不受数据库排序规则影响）、支持重复行；返回差异行列表"""
-    s = sorted(norm_row(r) for r in srows)
-    m = sorted(norm_row(r) for r in mrows)
+    # P1-1：_safe_sort_key 带类型前缀，混合日期/普通字符串列不再 TypeError
+    s = sorted((norm_row(r) for r in srows), key=_safe_sort_key)
+    m = sorted((norm_row(r) for r in mrows), key=_safe_sort_key)
     bad = []
     if len(s) != len(m):
         return [f"行数不一致（值集层面）: sqlite={len(s)} vs mdb={len(m)}"]
@@ -267,7 +284,11 @@ def main():
             if not cmp_cols:
                 continue
             srows = fetch_rows_sqlite(conn, t, cmp_cols)
-            mrows = fetch_rows_mdb(mconn, t, cmp_cols)
+            try:
+                mrows = fetch_rows_mdb(mconn, t, cmp_cols)
+            except Exception as e:  # P2-2：MDB 缺列等异常不中断整个校验（修复前直接崩溃）
+                bad.append(f"{t}: mdb 读取失败（可能缺列）: {e}")
+                continue
             diffs = compare_multiset(srows, mrows, cmp_cols)
             if diffs:
                 for d in diffs[:30]:

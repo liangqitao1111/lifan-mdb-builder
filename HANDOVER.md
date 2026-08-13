@@ -257,3 +257,28 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 - `#` 列孔内序号分页重排（纯展示，用户指定不修）
 - CORS `*` / token 内存表 / 默认 admin:admin（公网部署前收紧）
 - 真实库验证库：`C:\Users\神舟\Desktop\数据库再备份\江村西2026-0803-15.19备份.mdb`（db_id=ee7d0c77 已上传验证）
+
+## 14. 第二轮复核（2026-08-14，代码+数据全量）
+
+**数据全量验证**：e2e_real 408 孔 + 江村西 658 孔逐孔单孔复核 vs 全库复核对比 **0 不一致**（1066 孔全部一致）；spt-scan 建议抽查合理；R-GRS-001 定名抽样合理；A/B 岩溶统计、土工统计、柱状图、纵断面（有效孔）生成全部通过。
+
+### 第二轮新发现并修复
+| 级别 | 问题 | 修复 |
+|---|---|---|
+| P1-功能 | review_hole 对"只有土工数据"的孔误判 404"无数据"（全库复核却有 R-PLS/GRS 问题）——全量对比暴露 | test 参与"无数据"判断（实测 26-ZD-GZXT-0-1 404→200） |
+| P1-功能 | github_trigger wait_for_run：30s 向后容差 + 兜底取"最近一条"可匹配到上一次/别的 db 的 run → 旧产物静默缓存到当前 db_id | 精确 `created_at>=after_ts` 匹配 + 找不到即失败，绝不顶替 |
+| P1-安全 | github_trigger db_id 未消毒直接拼 artifacts/build.json 路径（CLI 用法可穿越） | 新增 sanitize_db_id，入口/写状态/缓存三处统一消毒 |
+| P1-功能 | karst_report_a `_natural_key` int/str 混合键 TypeError（孔号数字/字母开头混排崩溃） | 排序键改 (type_tag, value) 二元组 |
+| P1-功能 | karst_report_a 溶洞行缺 `thick>0` 过滤，附表 7A 与 8A 条数分裂（父模块 K1 修复回潮） | 与父模块同口径 `and thick>0` |
+| P1-功能 | karst_report_a 绑定顶层 karst_report 实例，配置保存后附表 8A 分档阈值陈旧 | reload_from_config 对 'karst_report'/'review.karst_report' 双实例重建 |
+| P1-功能 | profile_strip 单孔/同里程（min_lc==max_lc）无分段生成失败 | while 改 `<=` 保证至少一段；末段边界孔含端点归入 |
+| P1-功能 | verify_mdb 混合日期/普通字符串列排序 TypeError 整个校验崩溃 | _as_dt 仅接受完整日期格式（防 '2024' 假一致）+ _safe_sort_key 类型前缀 |
+| P2 | github_trigger cache_artifact 只捕 RuntimeError（BadZipFile 逃逸、状态卡 running）/zip 解压无穿越防护/多 .lz 取第一个 | except Exception 统一写 failed + _safe_extract 成员校验 + 排除"备份"条目 |
+| P2 | karst_report_a 模板残留数据行混入输出 / 见洞率替换判定 round 到 0 漏替换 | 填充前清空数据区旧值 / 改用"溶洞顶板深度 is None"判定 |
+| P2 | verify_mdb MDB 缺列崩溃 / zip extract 穿越 | try 记差异继续 + 条目路径校验 |
+| P2 | profile_strip prev 倒退重复计票（地层倒序数据） | prev 只前进不后退 |
+| P2 | sqlite_to_mdb TEXT(n) 数据超长 ACE 截断报错 / MEMO 主键 DDL 失败 | 超长自动升级 MEMO / MEMO/LONGBINARY 主键降级 |
+
+### 确认无问题（第二轮实测）
+- 纵断面 500 根因是**数据**（所选孔 ZKSD=0 被有效孔过滤），非代码缺陷；ZKSD>0 的孔生成正常
+- 全量单孔/全库一致性 1066/1066；配置热生效（674→436→674）；路径穿越 400 封堵；page_size 钳制

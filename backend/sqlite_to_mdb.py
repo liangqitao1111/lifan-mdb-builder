@@ -157,7 +157,22 @@ def table_columns(schema_tables, table_name, rows):
         mdb_type = normalize_mdb_type(c.get("mdb_type"))
         if mdb_type is None:
             mdb_type = infer_mdb_type(c.get("sqlite_type") or c.get("type"), None)
+        # P2-1：schema 声明 TEXT(n) 但实际数据超长时升级 MEMO——
+        # 修复前 ACE 报 "String data, right truncation" 使整个构建中断且无针对性提示
+        if mdb_type.startswith("TEXT(") and rows:
+            try:
+                _n = int(mdb_type[5:-1])
+                if _n < 255:
+                    _maxlen = max((len(str(row.get(c["name"]) or "")) for row in rows), default=0)
+                    if _maxlen > _n:
+                        mdb_type = "MEMO"
+            except (ValueError, TypeError):
+                pass
         pk = bool(c.get("primary_key")) or (table_pk is not None and c.get("name") == table_pk)
+        # P2-2：Access 不允许 MEMO/LONGBINARY/OLE 字段作主键/索引——降级为非主键
+        # （与 verify_mdb 的 UNORDERABLE_TYPES 同思路），避免 CREATE TABLE 直接抛错
+        if pk and mdb_type in ("MEMO", "LONGBINARY", "OLE", "BLOB"):
+            pk = False
         infos.append({"name": c["name"], "mdb_type": mdb_type, "primary_key": pk})
 
     seen = {c["name"] for c in infos}

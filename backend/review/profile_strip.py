@@ -74,15 +74,25 @@ def _build_segments(boreholes, segment_m=500):
     min_lc = float(valid[0][1])
     max_lc = valid[-1][1]
     segments, seg_start = [], min_lc
-    while seg_start < max_lc:
+    # P1-1：单孔/全部孔里程相同（min_lc == max_lc）时原 `while seg_start < max_lc`
+    # 直接为假 → 条带生成失败；改为 `<=` 保证至少一段。
+    # P2-1：末段边界孔（里程恰等于 seg_end=max_lc）原 `bh < seg_end` 会整孔丢弃，
+    # 末段改含端点 `<=`。
+    while seg_start <= max_lc:
         seg_end = seg_start + segment_m
-        seg_bhs = [bh for bh in valid if seg_start <= bh[1] < seg_end]
+        is_last = seg_end >= max_lc
+        if is_last:
+            seg_bhs = [bh for bh in valid if seg_start <= bh[1] <= max_lc]
+        else:
+            seg_bhs = [bh for bh in valid if seg_start <= bh[1] < seg_end]
         if seg_bhs:
             segments.append({
                 'start': seg_start, 'end': seg_end,
                 'boreholes': [b[0] for b in seg_bhs],
                 'x': int((seg_start - min_lc) / segment_m) * 10,
             })
+        if is_last:
+            break
         seg_start = seg_end
     return segments
 
@@ -105,14 +115,16 @@ def _build_column(da, borehole_ids, slice_m=0.5):
             top = max(prev, 0.0)
             bot = min(bottom, float(MAX_DEPTH))
             if top >= bot:
-                prev = bottom
+                # P2-2：prev 只前进不后退（修复前 bottom 小于上一层时 prev 倒退，
+                # 已投过的切片区间被重复计票，多数投票失真）
+                prev = max(prev, bottom)
                 continue
             simple = _simplify_name(name)
             si = int(top / slice_m)
             ei = int(math.ceil(bot / slice_m))
             for i in range(si, min(ei, total_slices)):
                 counter[i][simple] += 1
-            prev = bottom
+            prev = max(prev, bottom)
 
     dominant = []
     for i in range(total_slices):

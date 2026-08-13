@@ -14,6 +14,29 @@ from karst_report import (
 from applog import get_logger
 
 
+def reload_from_config():
+    """配置保存后重建父模块 karst_report 的派生常量（P1-1）
+
+    本模块经 `from karst_report import ...` 绑定的是【顶层】 karst_report 模块
+    实例（sys.path 同时含 backend 与 backend/review 时，'karst_report' 与
+    'review.karst_report' 是同一文件加载的两个独立模块对象）。review_api 的
+    _reload_config_modules 只重建 'review.karst_report'，顶层实例的 STAT_VARS/
+    阈值会永久陈旧（A 类附表 8A 分档与发育程度新旧混用）——此处对两个名字
+    都执行 _build_karst_constants。
+    """
+    import sys as _sys
+    for _name in ('karst_report', 'review.karst_report'):
+        _mod = _sys.modules.get(_name)
+        if _mod is None:
+            continue
+        _fn = getattr(_mod, '_build_karst_constants', None)
+        if callable(_fn):
+            try:
+                _fn()
+            except Exception:
+                pass
+
+
 def _template_path_a():
     """A 类附表7 模板路径（独立函数，便于测试注入替代模板验证裁剪逻辑）"""
     base = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -76,7 +99,9 @@ def generate_karst_report_a(da, out_dir):
                     bedrock_depth = prev_depth
 
             # V2.2.2 K2：高程 0 真值——地面标高 zkbg=0 时仍计算高程（is not None 判定）
-            if name in CAVE_TYPES:
+            # P1-3：与父模块 karst_report（thick>0 才计溶洞）口径对齐——tchd=0/缺失
+            # 且层顶=层底（bottom==prev）的零厚"溶洞"行不进入附表 7A，避免与附表 8A 条数分裂
+            if name in CAVE_TYPES and thick > 0:
                 top = bottom - thick
                 top_elev = zkbg - top if zkbg is not None else None
                 bottom_elev = zkbg - bottom if zkbg is not None else None
@@ -153,8 +178,11 @@ def generate_karst_report_a(da, out_dir):
     site_development = judge_development(site_line_rate, site_cave_hole_rate)
 
     # 用场地级值替换有溶洞的孔行；无溶洞孔行保持 0（避免把场地级比率误读为该孔有岩溶）
+    # P2-3：替换判定用"溶洞顶板深度"（与父模块 B1 同口径）——修复前用
+    # 'not 溶洞累计厚度'，cave_thick 四舍五入到 0.0 的孔被漏替换，孔已计入
+    # 场地见洞率分母却显示 0，统计与显示矛盾
     for row in output_rows:
-        if row.get('溶洞充填物特征') == '无溶洞' or not row.get('溶洞累计厚度'):
+        if row.get('溶洞顶板深度') is None:
             continue
         row['线岩溶率'] = site_line_rate
         row['钻孔见洞率'] = f"{site_cave_hole_rate}%"
@@ -172,7 +200,10 @@ def generate_karst_report_a(da, out_dir):
 
     def _natural_key(r):
         n = r.get('钻孔编号') or r.get('_sort_key', '')
-        return [int(c) if c.isdigit() else c.lower() for c in _re.split(r'(\d+)', str(n))]
+        # P1-2：修复前 int/str 混合键在同位置比较抛 TypeError（孔号数字开头
+        # 与字母开头混排时整个 A 类报告崩溃）；统一 (type_tag, value) 二元组
+        return [(0, int(c)) if c.isdigit() else (1, c.lower())
+                for c in _re.split(r'(\d+)', str(n))]
 
     output_rows.sort(key=_natural_key)
 
@@ -328,6 +359,13 @@ def _write_table7_a(rows, site_stats, path):
 
     # 记录模板原始行数，用于判断超出行
     template_max_row = ws.max_row
+
+    # P2-1：填充前清空模板数据区旧值（模板自带示例/旧数据行时，本次行数较少
+    # 会残留旧值混入输出；父模块 karst_report 是"先删第 4 行以下全部行"再写，
+    # 此处等价处理：仅清值、保留边框/行高/合并结构）
+    for r in range(data_start, template_max_row + 1):
+        for c in range(1, ws.max_column + 1):
+            ws.cell(row=r, column=c).value = None
 
     # 填充数据
     for ri, row_data in enumerate(rows):

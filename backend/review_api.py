@@ -107,7 +107,9 @@ def review_hole(db_id: str, zkbh: str, project_type: str = "B",
         # P1-⑩：显式传 project_type，避免模块级全局串口径
         dpt = da.get_dpt_data(zkbh, project_type) if hasattr(da, "get_dpt_data") else []
         test = da.get_test_data(zkbh) if hasattr(da, "get_test_data") and include_test else []
-        if not strata and not spt and not dpt:
+        # 复查发现：孔只有土工试验数据（无地层/标贯/动探）时此前 404"无数据"，
+        # 但全库复核该孔正常产出 R-PLS/R-GRS 问题——两入口不一致；test 须参与判断
+        if not strata and not spt and not dpt and not test:
             raise HTTPException(404, f"钻孔 {zkbh} 无数据")
         issues = engine.review_strata(strata, spt, dpt, test)
         return {"zkbh": zkbh, "issues": [_issue_to_dict(i) for i in issues]}

@@ -57,6 +57,20 @@ DB_STATUS_DIR = os.path.join(ROOT, "work", "dbs")
 
 
 # ---------------------------------------------------------------- HTTP
+def sanitize_db_id(db_id):
+    """db_id 消毒：只允许 [A-Za-z0-9_-]，非法返回 None
+
+    P1-2（安全）：此前 db_id 未校验直接拼进 artifacts/build.json 路径，
+    CLI 传 '..\\..\\x' 可越界写文件（Web 路径有 main.resolve_db 保护，
+    但本模块的 CLI/旧接口用法必须自防）。
+    """
+    if not db_id or not isinstance(db_id, str):
+        return None
+    if not all(c.isalnum() or c in "-_" for c in db_id):
+        return None
+    return db_id
+
+
 def api_req(url, token, method="GET", body=None, quiet=False):
     """GitHub REST 调用；quiet=True 时 HTTP 错误返回 None（用于探测文件是否存在）"""
     headers = {
@@ -88,6 +102,9 @@ def _parse_ts(s):
 # ---------------------------------------------------------------- build.json
 def write_build_status(db_id, status, run_id=None, conclusion=None):
     """写 work/dbs/{db_id}_build.json（契约 §1 e）：{status, run_id, conclusion, updated_at}"""
+    db_id = sanitize_db_id(db_id)
+    if db_id is None:
+        raise ValueError("非法 db_id，拒绝写状态文件")
     payload = {
         "status": status,
         "run_id": run_id,
@@ -123,24 +140,24 @@ def put_payload(token, owner, repo, db_id, sqlite_path, schema_path):
 
 # ---------------------------------------------------------------- 触发 + 轮询
 def wait_for_run(token, owner, repo, after_ts, tries=8, sleep=5):
-    """repository_dispatch 异步创建 run：在 created_at >= after_ts 的 run 里找新的"""
+    """repository_dispatch 异步创建 run：找 created_at >= after_ts 的新 run
+
+    P1-1（静默产错）：修复前带 30 秒向后容差 + 兜底取"最近一条"——30 秒内
+    连续两次触发会命中上一次的 run；超时兜底可能取到几天前别的 db_id 的 run，
+    若其结论 success，旧产物会被缓存到当前 db_id 名下（build.json 写 success）。
+    现要求 created_at >= after_ts 精确匹配（dispatch 时间由调用方传入 UTC），
+    找不到即失败退出，绝不拿旧 run 顶替。
+    """
     for _ in range(tries):
         runs = api_req(
             f"{API}/repos/{owner}/{repo}/actions/runs?event=repository_dispatch&per_page=10",
             token)
         for run in (runs.get("workflow_runs") or []):
             created = _parse_ts(run.get("created_at") or "")
-            if created and created >= after_ts - timedelta(seconds=30):
+            if created and created >= after_ts:
                 return run["id"]
         time.sleep(sleep)
-    # 兜底：取最近一条
-    runs = api_req(
-        f"{API}/repos/{owner}/{repo}/actions/runs?event=repository_dispatch&per_page=1",
-        token)
-    items = runs.get("workflow_runs") or []
-    if items:
-        return items[0]["id"]
-    sys.exit("❌ 未找到新 run（可能还在排队，稍后可用 --poll 指定 run_id）")
+    sys.exit("❌ 未找到新 run（可能还在排队，稍后可用 --poll 指定 run_id；拒绝用旧 run 顶替）")
 
 
 def poll(token, owner, repo, run_id, timeout=900):
@@ -197,16 +214,34 @@ def fetch_artifact_zip(token, owner, repo, run_id):
 
 
 def extract_lz_from_artifact(zip_path):
-    """artifact zip → 内部 .lz 字节"""
+    """artifact zip → 内部 .lz 字节
+
+    P2-3：多 .lz 条目时排除含「备份」的（与 _extract_mdb_from_lz/verify_mdb 同口径），
+    避免取到备份产物。
+    """
     with zipfile.ZipFile(zip_path) as z:
         names = [n for n in z.namelist() if n.lower().endswith(".lz")]
+        names = [n for n in names if '备份' not in n and not n.lower().endswith('.ldb')]
         if not names:
-            raise RuntimeError("artifact 内没有 .lz 文件")
+            raise RuntimeError("artifact 内没有 .lz 文件（已排除备份/ldb）")
         return z.read(names[0])
+
+
+def _safe_extract(z, out_dir):
+    """P2-2（安全）：zip 解压防路径穿越——拒绝含 .. 段/绝对路径/盘符的条目"""
+    for member in z.infolist():
+        name = member.filename
+        norm = name.replace("\\", "/")
+        if norm.startswith("/") or ".." in norm.split("/") or (len(norm) >= 2 and norm[1] == ":"):
+            raise RuntimeError(f"artifact 含非法路径条目，拒绝解压: {name}")
+    z.extractall(out_dir)
 
 
 def cache_artifact(token, owner, repo, run_id, db_id):
     """d) 下载 artifact 并缓存为 work/artifacts/{db_id}.lz，返回缓存路径"""
+    db_id = sanitize_db_id(db_id)
+    if db_id is None:
+        raise RuntimeError("非法 db_id，拒绝缓存产物")
     zip_path, tmpdir, name = fetch_artifact_zip(token, owner, repo, run_id)
     try:
         data = extract_lz_from_artifact(zip_path)
@@ -226,7 +261,7 @@ def download(token, owner, repo, run_id, out_dir):
     try:
         os.makedirs(out_dir, exist_ok=True)
         with zipfile.ZipFile(zip_path) as z:
-            z.extractall(out_dir)
+            _safe_extract(z, out_dir)  # P2-2：防路径穿越
         files = os.listdir(out_dir)
         print(f"✓ 解压到 {out_dir}/ → {files}")
         return out_dir
@@ -247,6 +282,9 @@ def latest_successful_run(token, owner, repo):
 # ---------------------------------------------------------------- 主入口
 def trigger_build(token, owner, repo, db_id, sqlite_path, schema_path, timeout=900):
     """契约 §1 触发生成全链路：上传 payload → dispatch → 轮询 → 缓存产物 → build.json"""
+    db_id = sanitize_db_id(db_id)  # P1-2：入口统一消毒（CLI 直接传参路径）
+    if db_id is None:
+        raise ValueError("非法 db_id（仅允许字母/数字/-/_）")
     write_build_status(db_id, "running")                       # 触发前先写 running
     print(f"▶ 触发 workflow: {owner}/{repo} (event={EVENT}, db_id={db_id})")
     put_payload(token, owner, repo, db_id, sqlite_path, schema_path)
@@ -274,7 +312,8 @@ def trigger_build(token, owner, repo, db_id, sqlite_path, schema_path, timeout=9
     if concl == "success":
         try:
             cache_artifact(token, owner, repo, run_id, db_id)
-        except RuntimeError as e:
+        except Exception as e:  # P2-1：修复前只捕 RuntimeError，BadZipFile/OSError
+            # 会逃逸且 build.json 停在 running；现统一写 failed
             write_build_status(db_id, "failed", run_id=run_id, conclusion=concl)
             sys.exit(f"❌ {e}")
         write_build_status(db_id, "success", run_id=run_id, conclusion=concl)
