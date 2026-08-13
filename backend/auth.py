@@ -32,8 +32,13 @@ def login(username, password):
     if not _verify_password(username.strip(), password):
         return None
     token = secrets.token_hex(24)
+    now = time.time()
     with _lock:
-        _tokens[token] = {"user": username.strip(), "exp": time.time() + _TOKEN_TTL}
+        # 顺带清理过期 token（内存表防无限增长）
+        expired = [t for t, rec in _tokens.items() if rec["exp"] < now]
+        for t in expired:
+            _tokens.pop(t, None)
+        _tokens[token] = {"user": username.strip(), "exp": now + _TOKEN_TTL}
     audit(username.strip(), "login", "POST /api/login", 200)
     return token
 

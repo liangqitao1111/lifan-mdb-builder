@@ -43,12 +43,25 @@ LEGACY_DECIMAL_OVERRIDE = {'hsl':1,'gmd':1,'yx':1,'sx':1,'sxzs':1,'yxzs':2,
 
 # 小数位覆盖（v2 特有：供"原始数据/标贯原始数据"表公式与数字格式使用；
 # INDICATORS/REASONABLE_RANGES 等其余指标配置已由 soil_stats 统一加载）
-_cfg = load_project_config()
-_ti = _cfg.get('试验指标', {})
-if _ti:
-    DECIMAL_OVERRIDE = {k: v['小数位'] for k, v in _ti.items() if v.get('小数位') is not None}
-else:
-    DECIMAL_OVERRIDE = dict(LEGACY_DECIMAL_OVERRIDE)
+def _build_config():
+    """重建 v2 小数位覆盖表（import 时与配置保存后各调用一次）"""
+    global _cfg, _ti, DECIMAL_OVERRIDE
+
+    _cfg = load_project_config()
+    _ti = _cfg.get('试验指标', {})
+    if _ti:
+        DECIMAL_OVERRIDE = {k: v['小数位'] for k, v in _ti.items() if v.get('小数位') is not None}
+    else:
+        DECIMAL_OVERRIDE = dict(LEGACY_DECIMAL_OVERRIDE)
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
+
 
 # =========================================================================
 # 数据结构（v2 特有：原始样本）

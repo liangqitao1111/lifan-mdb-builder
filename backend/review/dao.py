@@ -28,24 +28,53 @@ def set_project_type(project_type):
 # （铁建承载力计算表.xlsx 标贯修正 sheet）；知识库《标贯杆长修正系数》仅收录
 # 至 21m（3~21m 与项目表逐项吻合），24m+ 段未见铁路规程原文直接佐证、公开
 # 文献存在分歧（0.67/0.65/0.63 等），按项目表单一来源执行（合规审查可疑项 2.4）。
-_cfg = load_project_config()
-_tmp = _cfg.get('公用', {}).get('标贯杆长修正_B类', {})
-if _tmp:
-    items = []
-    for k, v in _tmp.items():
-        if k == '用途': continue
-        length = float(k.replace('m',''))
-        items.append((length, float(v)))
-    items.sort()
-    _SPT_ROD_LENGTH = [l for l,c in items]
-    _SPT_COEFF = [c for l,c in items]
-else:
-    _SPT_ROD_LENGTH = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-    _SPT_COEFF = [1.00, 0.92, 0.86, 0.81, 0.77, 0.73, 0.70, 0.68, 0.65, 0.63]
-
-# ---- 颗分 0.075mm 粒组去重（kl_075/kl_074 为同一筛孔粒组的不同字段命名，TOML 可配置）----
-_kefen_cfg = _cfg.get('公用', {}).get('颗分_粒组划分', {})
+_SPT_ROD_LENGTH = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
+_SPT_COEFF = [1.00, 0.92, 0.86, 0.81, 0.77, 0.73, 0.70, 0.68, 0.65, 0.63]
 KEFEN_DEDUPE_0075 = True
+
+
+def _build_rod_config():
+    """重建 dao 模块级派生常量（import 时与配置保存后各调用一次）
+
+    P1-⑤：标贯杆长修正_B类 系数表与 颗分粒组去重开关此前在 import 期固化，
+    参数中心修改后不生效；现由 reload_from_config 重建。
+    """
+    global _SPT_ROD_LENGTH, _SPT_COEFF, KEFEN_DEDUPE_0075
+    _cfg = load_project_config()
+    _tmp = _cfg.get('公用', {}).get('标贯杆长修正_B类', {})
+    if _tmp:
+        items = []
+        for k, v in _tmp.items():
+            if k == '用途': continue
+            try:
+                length = float(k.replace('m', ''))
+                items.append((length, float(v)))
+            except (ValueError, TypeError):
+                continue
+        items.sort()
+        # P2-6 同口径：同值双档去重（严格递增，避免插值除零）
+        _dedup = []
+        for l, c in items:
+            if _dedup and _dedup[-1][0] == l:
+                _dedup[-1] = (l, c)
+            else:
+                _dedup.append((l, c))
+        items = _dedup
+        if len(items) >= 2:
+            _SPT_ROD_LENGTH = [l for l, c in items]
+            _SPT_COEFF = [c for l, c in items]
+    _kefen_cfg = _cfg.get('公用', {}).get('颗分_粒组划分', {})
+    KEFEN_DEDUPE_0075 = True
+    if isinstance(_kefen_cfg, dict):
+        KEFEN_DEDUPE_0075 = bool(_kefen_cfg.get('0.075mm粒组去重', True))
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_rod_config()
+
+
+_build_rod_config()
 
 
 # ---- 颗分粒组 → 统计桶映射（V2.2.3 S2 修正）----
@@ -78,8 +107,6 @@ def _kefen_to_buckets(kf):
         r025_0075 = _safe_sum(kf[7:10])
     r0075 = _safe_sum(kf[10:15])
     return r20_2, r2_05, r05_025, r025_0075, r0075
-if isinstance(_kefen_cfg, dict):
-    KEFEN_DEDUPE_0075 = bool(_kefen_cfg.get('0.075mm粒组去重', True))
 
 
 def _max_non_none(a, b):
@@ -134,20 +161,6 @@ def _log_error(msg):
             f.write(f'[{ts}] {msg}\n')
     except Exception:
         pass
-
-
-def _retry_read(fn, *args, max_retries=1):
-    """数据库读取重试：首次失败后等 0.3s 重试一次"""
-    last_error = None
-    for attempt in range(max_retries + 1):
-        try:
-            return fn(*args)
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries:
-                time.sleep(0.3)
-    _log_error(f'数据读取失败(重试{max_retries}次仍失败): {last_error}')
-    return []
 
 
 class DataAccess:
@@ -327,8 +340,22 @@ class DataAccess:
     # ---- 读取 ----
 
     def get_all_boreholes(self):
+        # P1-1：列探测——此前直接 SELECT 固定列，ZKLC/ZKPIL 缺失时 SQL 整表失败
+        # → 返回 []（全部钻孔静默消失，KPI 卡/钻孔列表全空）；hasattr 回退是死代码
+        # （AttrRow 属性=SELECT 列表，列缺失根本到不了行）。现按实际列组装 SELECT。
+        cols = ['ZKBH', 'ZKX', 'ZKY', 'ZKSD', 'ZKBG']
+        try:
+            cur = self._safe_query('钻孔列探测',
+                                   f"SELECT * FROM {self._t('z_ZuanKong')} WHERE 1=0")
+            if cur and cur.description:
+                actual = {c[0].upper() for c in cur.description}
+                for c in ('ZKLC', 'ZKPIL'):
+                    if c in actual:
+                        cols.append(c)
+        except Exception:
+            _log_error(f'钻孔列探测失败: {traceback.format_exc()}')
         cursor = self._safe_query('钻孔列表',
-            f"SELECT ZKBH, ZKX, ZKY, ZKSD, ZKBG, ZKLC, ZKPIL FROM {self._t('z_ZuanKong')} ORDER BY ZKBH")
+            f"SELECT {', '.join(cols)} FROM {self._t('z_ZuanKong')} ORDER BY ZKBH")
         if cursor is None:
             return []
         rows = []
@@ -345,7 +372,7 @@ class DataAccess:
     def get_strata(self, gcsy, zkbh):
         sql = f"""SELECT TCZCBH, TCYCBH, TCXH, TCCDSD, TCHD, TCYMC, TCMC, TCDZSD, TCDZCY,
                         TCYS, TCKSX, TCMSD, TCSID, TCFHCD, TCMS FROM {self._t('z_g_TuCeng')}
-                 WHERE %s ZKBH = ? ORDER BY TCCDSD""" % ('GCSY = ? AND' if gcsy else '')
+                 WHERE %s ZKBH = ? ORDER BY TCCDSD, TCXH""" % ('GCSY = ? AND' if gcsy else '')
         cursor = self._safe_query('地层数据', sql, [gcsy, zkbh] if gcsy else [zkbh])
         if cursor is None:
             return []
@@ -358,48 +385,56 @@ class DataAccess:
         if cursor is None:
             return []
         rows = []
+        # P3（N+1）：先整孔批量取颗分/固结（修复前每行 2 次子查询）
+        kefen_map = {}
+        try:
+            kf_cur = self.conn.cursor()
+            kf_cur.execute(
+                f"SELECT QYBH, kl20,kl10,kl5,kl2,kl1,kl_5,kl_25,kl_1,"
+                f"kl_075,kl_074,kl_05,kl_01,kl_005,kl_002,kl0 "
+                f"FROM {self._t('z_c_KeFen')} WHERE ZKBH=?", [zkbh])
+            for kf in kf_cur.fetchall():
+                kefen_map[str(kf[0]).strip()] = _kefen_to_buckets(kf[1:])
+            kf_cur.close()
+        except Exception:
+            _log_error(f'读取颗分失败 ZKBH={zkbh}: {traceback.format_exc()}')
+        kxb_map = {}
+        try:
+            gj_col = self._probe_gujie_kxb_col()  # P1-2：GJKXBP0/GJKXBP0_ 变体探测
+            if gj_col:
+                gj_cur = self.conn.cursor()
+                gj_cur.execute(
+                    f"SELECT QYBH, [{gj_col}] FROM {self._t('z_c_GuJie')} WHERE ZKBH=?", [zkbh])
+                for gj in gj_cur.fetchall():
+                    if gj[1] is not None:
+                        try:
+                            kxb_map[str(gj[0]).strip()] = round(float(gj[1]), 3)
+                        except Exception:
+                            pass
+                gj_cur.close()
+        except Exception:
+            _log_error(f'读取固结失败 ZKBH={zkbh}: {traceback.format_exc()}')
+
         for r in cursor.fetchall():
                 hsl = self._opt_float(r.QYHSL)
                 yx = self._opt_float(r.QYYX)
                 sy = self._opt_float(r.QYSY)
                 il, ip = self._calc_il_ip(hsl, yx, sy)
-
-                # 颗分数据
-                r20_2 = r2_05 = r05_025 = r025_0075 = r0075 = None
-                kxb = None  # 孔隙比 e₀
-                try:
-                    cur2 = self.conn.cursor()
-                    cur2.execute(f"SELECT kl20,kl10,kl5,kl2,kl1,kl_5,kl_25,kl_1,kl_075,kl_074,kl_05,kl_01,kl_005,kl_002,kl0 FROM {self._t('z_c_KeFen')} WHERE ZKBH=? AND QYBH=?", [zkbh, r.QYBH])
-                    kf = cur2.fetchone()
-                    if kf:
-                        # 仅提取有数据的值，缺失列保持 None 不参与求和
-                        def _safe_sum(vals):
-                            non_none = [float(v) for v in vals if v is not None]
-                            return round(sum(non_none), 1) if non_none else None
-                        # V2.2.3（S2）：粒组→统计桶映射统一走 _kefen_to_buckets
-                        # （kl_075 归细砂桶 r025_0075，不再计入 r0075 细粒桶）
-                        r20_2, r2_05, r05_025, r025_0075, r0075 = _kefen_to_buckets(kf)
-                    # 查询固结试验孔隙比
-                    cur2.execute(f"SELECT GJKXBP0 FROM {self._t('z_c_GuJie')} WHERE ZKBH=? AND QYBH=?", [zkbh, r.QYBH])
-                    gj = cur2.fetchone()
-                    if gj and gj[0] is not None:
-                        try:
-                            kxb = round(float(gj[0]), 3)
-                        except Exception:
-                            kxb = None
-                    cur2.close()
-                except Exception:
-                    _log_error(f'读取颗分/固结失败 ZKBH={zkbh} QYBH={r.QYBH}: {traceback.format_exc()}')
-                    pass
+                qybh = str(r.QYBH).strip() if r.QYBH else ''
+                kf_b = kefen_map.get(qybh)
+                kxb = kxb_map.get(qybh)
 
                 rows.append({
-                    'qybh': str(r.QYBH).strip() if r.QYBH else '',
+                    'qybh': qybh,
                     'qysd': self._safe_float(r.QYSD, 0),
                     'hsl': hsl, 'yx': yx, 'sx': sy,
                     'yxzs': il, 'sxzs': ip, 'kxb': kxb,
                     'qydc': str(r.QYDC).strip() if r.QYDC else '',
-                    'r20_2': r20_2, 'r2_05': r2_05, 'r05_025': r05_025,
-                    'r025_0075': r025_0075, 'r0075': r0075,
+                    'r20_2': kf_b[0] if kf_b else None,
+                    'r2_05': kf_b[1] if kf_b else None,
+                    'r05_025': kf_b[2] if kf_b else None,
+                    'r025_0075': kf_b[3] if kf_b else None,
+                    'r0075': kf_b[4] if kf_b else None,
                 })
         return rows
 
@@ -484,7 +519,14 @@ class DataAccess:
         return result
 
     def get_all_test(self):
-        """批量读取所有试验，按 ZKBH 分组"""
+        """批量读取所有试验，按 ZKBH 分组
+
+        P0（全库复核漏颗分）：Step 2.5 批量联查 z_c_KeFen——修复前本函数不读颗分表，
+        r20_2/r2_05/r05_025/r025_0075/r0075 硬编码 None，全库复核/问题导出的
+        R-GRS-001 恒不触发，而单孔复核（get_test_data 读颗分）会触发，两入口结论
+        不一致（实测孔 26-ZD-GZXT-1-1：单孔 3 条 vs 全库 2 条）。现与 get_test_data
+        共用 _kefen_to_buckets 桶映射，批量一次查询消除 N+1。
+        """
         # Step 1: 批量查询取样表（与 get_test_data 同源）
         cursor = self._safe_query('试验数据(批量)',
             f"SELECT ZKBH, QYBH, QYSD, QYHSL, QYYX, QYSY, QYDC "
@@ -492,19 +534,37 @@ class DataAccess:
         if cursor is None:
             return {}
 
-        # Step 2: 批量查询固结表（取孔隙比 kxb）
+        # Step 2: 批量查询固结表（取孔隙比 kxb；P1-2：列名变体探测 GJKXBP0/GJKXBP0_）
         kxb_map = {}
         try:
-            gj_cur = self.conn.cursor()
-            gj_cur.execute(f"SELECT ZKBH, QYBH, GJKXBP0 FROM {self._t('z_c_GuJie')}")
-            for gj in gj_cur.fetchall():
-                key = (str(gj[0]).strip(), str(gj[1]).strip())
-                try:
-                    if gj[2] is not None:
-                        kxb_map[key] = round(float(gj[2]), 3)
-                except Exception:
-                    pass
-            gj_cur.close()
+            gj_col = self._probe_gujie_kxb_col()
+            if gj_col:
+                gj_cur = self.conn.cursor()
+                gj_cur.execute(f"SELECT ZKBH, QYBH, [{gj_col}] FROM {self._t('z_c_GuJie')}")
+                for gj in gj_cur.fetchall():
+                    key = (str(gj[0]).strip(), str(gj[1]).strip())
+                    try:
+                        if gj[2] is not None:
+                            kxb_map[key] = round(float(gj[2]), 3)
+                    except Exception:
+                        pass
+                gj_cur.close()
+        except Exception:
+            pass
+
+        # Step 2.5（P0）: 批量查询颗分表 → (zkbh, qybh) → 粒组统计桶
+        kefen_map = {}
+        try:
+            kf_cur = self.conn.cursor()
+            kf_cur.execute(
+                f"SELECT ZKBH, QYBH, kl20,kl10,kl5,kl2,kl1,kl_5,kl_25,kl_1,"
+                f"kl_075,kl_074,kl_05,kl_01,kl_005,kl_002,kl0 "
+                f"FROM {self._t('z_c_KeFen')}")
+            for kf in kf_cur.fetchall():
+                key = (str(kf[0]).strip(), str(kf[1]).strip())
+                buckets = _kefen_to_buckets(kf[2:])
+                kefen_map[key] = buckets
+            kf_cur.close()
         except Exception:
             pass
 
@@ -517,6 +577,7 @@ class DataAccess:
             il, ip = self._calc_il_ip(hsl, yx, sy)
             qybh = str(r.QYBH).strip() if r.QYBH else ''
             kxb = kxb_map.get((zkbh, qybh), None)
+            kf_b = kefen_map.get((zkbh, qybh))
 
             row = {
                 'qybh': qybh,
@@ -524,11 +585,29 @@ class DataAccess:
                 'hsl': hsl, 'yx': yx, 'sx': sy,
                 'yxzs': il, 'sxzs': ip, 'kxb': kxb,
                 'qydc': str(r.QYDC).strip() if r.QYDC else '',
-                'r20_2': None, 'r2_05': None, 'r05_025': None,
-                'r025_0075': None, 'r0075': None,
+                'r20_2': kf_b[0] if kf_b else None,
+                'r2_05': kf_b[1] if kf_b else None,
+                'r05_025': kf_b[2] if kf_b else None,
+                'r025_0075': kf_b[3] if kf_b else None,
+                'r0075': kf_b[4] if kf_b else None,
             }
             result.setdefault(zkbh, []).append(row)
         return result
+
+    def _probe_gujie_kxb_col(self):
+        """固结表孔隙比列探测（P1-2）：理正 8.5 用 GJKXBP0、9.0 变体用 GJKXBP0_，
+        探测失败返回 None（调用方跳过 kxb，不再整块吞异常静默失效）"""
+        try:
+            cur = self._safe_query('固结列探测',
+                                   f"SELECT * FROM {self._t('z_c_GuJie')} WHERE 1=0")
+            if cur and cur.description:
+                cols = [c[0].upper() for c in cur.description]
+                for cand in ('GJKXBP0', 'GJKXBP0_'):
+                    if cand in cols:
+                        return cand
+        except Exception:
+            _log_error(f'固结表列探测失败: {traceback.format_exc()}')
+        return None
 
     def get_all_test_full(self, project_type='B'):
         """批量读取所有土工试验数据（取样表 + 固结表 + 直剪表分别查询），按 ZKBH 分组
@@ -564,30 +643,33 @@ class DataAccess:
             return {}
 
         result = {}
+        # 取值辅助：主字段优先，若为 None 且允许后备则尝试 _ 后缀字段（提出循环，P3）
+        def _val(r, col, fallback_col=None):
+            v = getattr(r, col, None)
+            if v is not None:
+                try: return float(v)
+                except: return v
+            if fallback_col and has_ext_fields:
+                v2 = getattr(r, fallback_col, None)
+                if v2 is not None:
+                    try: return float(v2)
+                    except: return v2
+            return None
+
         for r in cursor.fetchall():
             zkbh = str(r.ZKBH).strip()
             qybh = str(r.QYBH).strip() if r.QYBH else ''
 
-            # 取值辅助：主字段优先，若为 None 且允许后备则尝试 _ 后缀字段
-            def _val(col, fallback_col=None):
-                v = getattr(r, col, None)
-                if v is not None:
-                    try: return float(v)
-                    except: return v
-                if fallback_col and has_ext_fields:
-                    v2 = getattr(r, fallback_col, None)
-                    if v2 is not None:
-                        try: return float(v2)
-                        except: return v2
-                return None
-
-            hsl = _val('QYHSL', 'QYHSL_')
-            yx = _val('QYYX', 'QYYX_')
-            sy = _val('QYSY', 'QYSY_')
-            gmd_raw = _val('QYZLMD', 'QYZLMD_')
+            hsl = _val(r, 'QYHSL', 'QYHSL_')
+            yx = _val(r, 'QYYX', 'QYYX_')
+            sy = _val(r, 'QYSY', 'QYSY_')
+            gmd_raw = _val(r, 'QYZLMD', 'QYZLMD_')
             gmd = round(gmd_raw * 9.81, 1) if gmd_raw is not None else None
-            gs = _val('QYBZ', 'QYBZ_')
-            kxb = _val('QYKXB', 'QYKXB_')
+            gs = _val(r, 'QYBZ', 'QYBZ_')
+            # P1-4：e₀ 来源统一——不再从取样表 QYKXB 取（A 类此前用取样表、
+            # B 类用固结表，同库 A/B 统计 e₀ 来源与数值不一致）；统一由固结表
+            # GJKXBP0(-) 提供，下方固结块覆盖写入，取样表值仅作固结缺失兜底
+            kxb = None
 
             il, ip = self._calc_il_ip(hsl, yx, sy)
 
@@ -616,30 +698,35 @@ class DataAccess:
                 _log_error(f'固结表结构探测失败({t_gj}): {e}')
 
             gj_kxb = ('GJKXBP0' if 'GJKXBP0' in gj_cols
-                      else 'GJKXBP0_' if 'GJKXBP0_' in gj_cols else 'GJKXBP0')
-            gj_alpha = next((f for f in ['GJXSXM1', 'GJXS0102'] if f in gj_cols), 'GJXSXM1')
-            gj_es = next((f for f in ['GJMLXM1', 'GJML0102'] if f in gj_cols), 'GJMLXM1')
+                      else 'GJKXBP0_' if 'GJKXBP0_' in gj_cols else None)
+            # P1-3：修复前候选列全缺时回退到不存在的默认列名（GJXSXM1/GJMLXM1），
+            # SELECT 必失败 → 整个固结块被 except 吞掉，kxb/alpha/Es 全丢。
+            # 现候选全缺时置 None（该字段不参与 SELECT，其余字段仍可取）。
+            gj_alpha = next((f for f in ['GJXSXM1', 'GJXS0102'] if f in gj_cols), None)
+            gj_es = next((f for f in ['GJMLXM1', 'GJML0102'] if f in gj_cols), None)
+            gj_fields = [f for f in (gj_kxb, gj_alpha, gj_es) if f]
 
-            c2 = self._safe_query('固结数据(批量)',
-                f"SELECT ZKBH, QYBH, {gj_kxb}, {gj_alpha}, {gj_es} "
-                f"FROM {t_gj} ORDER BY ZKBH, QYBH")
-            if c2:
-                for r in c2.fetchall():
-                    key = (str(r.ZKBH).strip(), str(r.QYBH).strip())
-                    alpha_val = self._safe_float(getattr(r, gj_alpha, None), None)
-                    es_val = self._safe_float(getattr(r, gj_es, None), None)
-                    kxb_val = self._safe_float(getattr(r, gj_kxb, None), None)
-                    # 也尝试从行属性获取（兼容字段命名差异）
-                    if kxb_val is None: kxb_val = self._safe_float(getattr(r, 'GJKXBP0', None), None)
-                    if kxb_val is None: kxb_val = self._safe_float(getattr(r, 'GJKXBP0_', None), None)
-                    for d in result.get(key[0], []):
-                        if d['qybh'] == key[1]:
-                            if kxb_val is not None and d['kxb'] is None:
-                                d['kxb'] = kxb_val
-                            if alpha_val is not None:
-                                d['alpha'] = alpha_val
-                            if es_val is not None:
-                                d['Es'] = es_val
+            if gj_fields:
+                c2 = self._safe_query('固结数据(批量)',
+                    f"SELECT ZKBH, QYBH, {', '.join(gj_fields)} "
+                    f"FROM {t_gj} ORDER BY ZKBH, QYBH")
+                if c2:
+                    for r in c2.fetchall():
+                        key = (str(r.ZKBH).strip(), str(r.QYBH).strip())
+                        alpha_val = self._safe_float(getattr(r, gj_alpha, None), None) if gj_alpha else None
+                        es_val = self._safe_float(getattr(r, gj_es, None), None) if gj_es else None
+                        kxb_val = self._safe_float(getattr(r, gj_kxb, None), None) if gj_kxb else None
+                        if kxb_val is None: kxb_val = self._safe_float(getattr(r, 'GJKXBP0', None), None)
+                        if kxb_val is None: kxb_val = self._safe_float(getattr(r, 'GJKXBP0_', None), None)
+                        for d in result.get(key[0], []):
+                            if d['qybh'] == key[1]:
+                                # P1-4：固结表值无条件优先（覆盖取样表兜底值）
+                                if kxb_val is not None:
+                                    d['kxb'] = kxb_val
+                                if alpha_val is not None:
+                                    d['alpha'] = alpha_val
+                                if es_val is not None:
+                                    d['Es'] = es_val
         except Exception as e:
             _log_error(f'固结数据(批量)读取失败: {e}')
 
@@ -657,6 +744,10 @@ class DataAccess:
             zj_00coh = 'ZJNJL00' if 'ZJNJL00' in zj_cols else None
             zj_10phi = 'ZJNMJ10' if 'ZJNMJ10' in zj_cols else None
             zj_10coh = 'ZJNJL10' if 'ZJNJL10' in zj_cols else None
+            # P2（直剪单侧）：无 00 列但有 10 列（理正变体）时回退用 10 列，
+            # 不再整块跳过
+            if not zj_00phi and zj_10phi:
+                zj_00phi, zj_00coh = zj_10phi, zj_10coh
 
             if zj_00phi and zj_00coh:
                 zj_select = f"ZKBH, QYBH, ZJSYFF, {zj_00phi}, {zj_00coh}"
@@ -704,12 +795,14 @@ class DataAccess:
 
     # G1（V2.2.6）：岩土名称列探测——理正库存在 TCMC / TCYMC 两种列形态，
     # 读侧已 (TCMC or TCYMC) 优先，写侧必须与读侧同口径，否则 TCMC 型库改名称恒验证失败。
-    _stratum_name_col_cache = None
+    # P2（跨库污染）：缓存从类级改为实例级——Web 端单进程可轮换多个工作库，
+    # 类级缓存会在切换库后沿用上一库的列形态（TCMC 型库探测结果泄漏到 TCYMC 型库）。
+    _stratum_name_col_cache = None  # 实例级占位（__init__ 中重置）
 
     def get_stratum_name_col(self):
         """返回该库岩土名称实际列名（'TCMC' 优先，否则 'TCYMC'）"""
-        if DataAccess._stratum_name_col_cache is not None:
-            return DataAccess._stratum_name_col_cache
+        if self._stratum_name_col_cache is not None:
+            return self._stratum_name_col_cache
         col = 'TCYMC'
         try:
             cur = self._safe_query('岩土名称列探测',
@@ -720,7 +813,7 @@ class DataAccess:
                     col = 'TCMC'
         except Exception:
             _log_error(f'岩土名称列探测失败，回退 TCYMC: {traceback.format_exc()}')
-        DataAccess._stratum_name_col_cache = col
+        self._stratum_name_col_cache = col
         return col
 
     def update_stratum_field(self, zkbh, tcxh, field, value, commit=True):
@@ -839,6 +932,10 @@ class DataAccess:
                      'tcmsd': 'TCMSD', 'tcksx': 'TCKSX', 'tcsid': 'TCSID', 'tcfhcd': 'TCFHCD', 'tcms': 'TCMS'}
         for key, dbf in field_map.items():
             val = layer_dict.get(key, '')
+            # P3：tcmc 键兜底——调用方可能只传 'tcmc'（岩土名称异名），
+            # 与读侧 _row_to_stratum 的 (TCMC or TCYMC) 同源口径一致
+            if val in (None, '') and key == 'tcymc':
+                val = layer_dict.get('tcmc', '')
             if val or val == 0 or val == 0.0:
                 fields.append(dbf)
                 values.append(val)

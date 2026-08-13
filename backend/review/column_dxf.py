@@ -25,47 +25,61 @@ from ezdxf.enums import TextEntityAlignment
 # ---------------------------------------------------------------------------
 # 配置常量（从 TOML 读取，兼容无配置文件的回退）
 # ---------------------------------------------------------------------------
-from config import load_project_config
-_dxf_cfg = load_project_config().get('DXF_小柱状图', {})
-INTERVAL = _dxf_cfg.get('里程间隔', 500)              # 里程区间长度 (m)
-MAX_DEPTH = float(_dxf_cfg.get('最大深度', 15.0))      # 最大显示深度 (m)
+from config import load_project_config  # 模块级 import（_build_config 与函数内运行时共用此名）
 
-# 柱状图几何参数（CAD 坐标，单位 mm）
-COL_WIDTH = int(_dxf_cfg.get('柱宽', 10))              # 柱宽
-COL_HEIGHT = int(_dxf_cfg.get('柱高', 15))             # 柱高 15mm（对应 15m 深度）
-DEPTH_SCALE = COL_HEIGHT / MAX_DEPTH                  # 1m = 1mm
-OFFSET_Y = 12                                          # 柱体顶部 Y
+def _build_config():
+    """重建 小柱状图 DXF 参数（import 时与配置保存后各调用一次）"""
+    global _dxf_cfg, INTERVAL, MAX_DEPTH, COL_WIDTH, COL_HEIGHT, DEPTH_SCALE, OFFSET_Y, SPACING, ARROW_SIZE, TEXT_STYLE, LAYER_COLUMN, LAYER_DELETE, SHX_FONT, BIG_FONT, WIDTH_FACTOR, STRATA_NAME_MAP, MIN_THICKNESS, MIN_SAMPLE_THICKNESS
 
-# 右侧标注
-SPACING = int(_dxf_cfg.get('水平间距', 80))            # 各柱水平间距
+    _dxf_cfg = load_project_config().get('DXF_小柱状图', {})
+    INTERVAL = _dxf_cfg.get('里程间隔', 500)              # 里程区间长度 (m)
+    MAX_DEPTH = float(_dxf_cfg.get('最大深度', 15.0))      # 最大显示深度 (m)
 
-# 水位标注
-ARROW_SIZE = 2.0                                       # 三角箭头边长
+    # 柱状图几何参数（CAD 坐标，单位 mm）
+    COL_WIDTH = int(_dxf_cfg.get('柱宽', 10))              # 柱宽
+    COL_HEIGHT = int(_dxf_cfg.get('柱高', 15))             # 柱高 15mm（对应 15m 深度）
+    DEPTH_SCALE = COL_HEIGHT / MAX_DEPTH                  # 1m = 1mm
+    OFFSET_Y = 12                                          # 柱体顶部 Y
 
-# 文字样式与图层
-TEXT_STYLE = '地质'
-LAYER_COLUMN = '地质-小柱状图'
-LAYER_DELETE = '删除'
-SHX_FONT = 'comfont.shx'
-BIG_FONT = 'hztxt.shx'
-WIDTH_FACTOR = 0.7
+    # 右侧标注
+    SPACING = int(_dxf_cfg.get('水平间距', 80))            # 各柱水平间距
 
-# 岩土名称简化映射
-STRATA_NAME_MAP = _dxf_cfg.get('岩土名称简化', {
-    '溶洞': '灰岩',
-    '土洞': '灰岩',
-    '溶蚀': '灰岩',
-    '岩溶化灰岩': '灰岩',
-    '素填土': '填土',
-    '杂填土': '填土',
-    '人工填土': '填土',
-    '回填土': '填土',
-})
+    # 水位标注
+    ARROW_SIZE = 2.0                                       # 三角箭头边长
 
-# 最小平均厚度阈值（小于该值的不参与统计和绘制）
-MIN_THICKNESS = float(_dxf_cfg.get('最小厚度', 1.0))
-# 统计厚度阈值：小于该值的单层样本不参与厚度范围计算
-MIN_SAMPLE_THICKNESS = float(_dxf_cfg.get('最小样本厚度', 0.5))
+    # 文字样式与图层
+    TEXT_STYLE = '地质'
+    LAYER_COLUMN = '地质-小柱状图'
+    LAYER_DELETE = '删除'
+    SHX_FONT = 'comfont.shx'
+    BIG_FONT = 'hztxt.shx'
+    WIDTH_FACTOR = 0.7
+
+    # 岩土名称简化映射
+    STRATA_NAME_MAP = _dxf_cfg.get('岩土名称简化', {
+        '溶洞': '灰岩',
+        '土洞': '灰岩',
+        '溶蚀': '灰岩',
+        '岩溶化灰岩': '灰岩',
+        '素填土': '填土',
+        '杂填土': '填土',
+        '人工填土': '填土',
+        '回填土': '填土',
+    })
+
+    # 最小平均厚度阈值（小于该值的不参与统计和绘制）
+    MIN_THICKNESS = float(_dxf_cfg.get('最小厚度', 1.0))
+    # 统计厚度阈值：小于该值的单层样本不参与厚度范围计算
+    MIN_SAMPLE_THICKNESS = float(_dxf_cfg.get('最小样本厚度', 0.5))
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
+
 
 
 # ---------------------------------------------------------------------------

@@ -105,7 +105,9 @@ def test_review_all(db_id):
     assert s["total"] == s["h"] + s["m"], "H+M 与 total 不一致"
     if IS_REAL:
         assert s["holes"] == 408, f"真实库应 408 孔，实际 {s['holes']}"
-        assert s["total"] == 147, f"真实库应 147 问题，实际 {s['total']}"
+        # P0 修复后 147→251：dao.get_all_test 补读颗分表 z_c_KeFen，全库复核的
+        # R-GRS-001（104 条）不再漏报（与单孔复核口径一致，见 test_review_include_test）
+        assert s["total"] == 251, f"真实库应 251 问题（含 R-GRS-001 104 条），实际 {s['total']}"
 
 
 def test_review_single(db_id):
@@ -275,4 +277,6 @@ def test_review_include_test(db_id):
     assert t_off >= 0 and t_on >= t_off, f"含土工判别问题数应≥不含土工: {t_on} vs {t_off}"
     if IS_REAL:
         assert t_off == 50, f"B类无土工应 50（桌面端 enable_test_review=False 口径），实际 {t_off}"
-        assert t_on == 147, f"B类含土工应 147（桌面端一致），实际 {t_on}"
+        # P0 修复后 147→251：全库复核现含 R-GRS-001（104 条，get_all_test 补读颗分表），
+        # 与单孔复核/桌面单孔口径一致；桌面版全库复核同样漏报 GRS（见 cmp_runner 豁免说明）
+        assert t_on == 251, f"B类含土工应 251（含 R-GRS-001 104 条），实际 {t_on}"

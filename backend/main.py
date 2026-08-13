@@ -96,11 +96,6 @@ def logout(request: Request):
 _PUBLIC_PATHS = ("/api/login", "/api/health")
 
 
-def _bearer_token():
-    from starlette.requests import Request
-    return None  # placeholder，中间件内直接读 header
-
-
 @app.middleware("http")
 async def auth_middleware(request, call_next):
     from starlette.responses import JSONResponse
@@ -162,6 +157,9 @@ def _extract_mdb_from_lz(lz_path: str, db_id: str) -> str:
 
 
 # ---------- 上传：.mdb/.lz → SQLite ----------
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "512")) * 1024 * 1024  # 默认 512MB
+
+
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -169,10 +167,30 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(400, f"仅支持 .mdb/.lz/.accdb，收到 {ext or '未知'}")
     db_id = str(uuid.uuid4())[:8]
     orig_path = os.path.join(UPLOAD_DIR, f"{db_id}{ext}")
+    # P2-6：流式写入 + 大小上限（此前无限制，超大文件可耗尽磁盘）
+    size = 0
     with open(orig_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_UPLOAD_BYTES:
+                f.close()
+                os.remove(orig_path)
+                raise HTTPException(413, f"文件超过大小上限 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB")
+            f.write(chunk)
     # .lz：解压取内嵌 MDB（含密码重试逻辑由 mdb_reader 提供）
     mdb_path = _extract_mdb_from_lz(orig_path, db_id) if ext == ".lz" else orig_path
+    # 解压后的 .mdb 同样受大小上限约束（ZIP 炸弹防护：压缩包小、解压后巨大）
+    if mdb_path != orig_path and os.path.exists(mdb_path):
+        if os.path.getsize(mdb_path) > MAX_UPLOAD_BYTES:
+            for _p in (mdb_path, orig_path):
+                try:
+                    os.remove(_p)
+                except OSError:
+                    pass
+            raise HTTPException(413, f"解压后 .mdb 超过大小上限 {MAX_UPLOAD_BYTES // (1024 * 1024)}MB")
     db_path = os.path.join(DB_DIR, f"{db_id}.db")
     try:
         stats = wdb.import_mdb(db_path, mdb_path, db_id=db_id)
@@ -183,7 +201,7 @@ async def upload(file: UploadFile = File(...)):
     return {
         "db_id": db_id,
         "file": file.filename,
-        "size": os.path.getsize(orig_path),
+        "size": size,
         "tables": stats,
     }
 
@@ -199,8 +217,12 @@ def read_table(db_id: str, table: str, page: int = 1, page_size: int = 50,
                keyword: str = "", search_col: str = "", exact: bool = False,
                order_by: str = "", order_dir: str = "asc"):
     path = resolve_db(db_id)
+    # P1-⑪：双端钳制——此前只钳上限（min(page_size, 200)），page_size=-1 时
+    # SQLite LIMIT -1 = 无限制，单请求拉全表（实测 2904 行全量返回）；page<1 同理
+    page = max(1, page)
+    page_size = max(1, min(page_size, 200))
     try:
-        return wdb.get_rows(path, table, page, min(page_size, 200),
+        return wdb.get_rows(path, table, page, page_size,
                             keyword or None, search_col or None, exact,
                             order_by or None, order_dir)
     except Exception as e:

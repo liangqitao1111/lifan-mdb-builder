@@ -19,9 +19,12 @@ LEGACY_DPT_DENSITY_MAP = [
     (10, 20, '中密'), (20, float('inf'), '密实'),
 ]
 LEGACY_SPT_PLASTICITY_A = [
-    (float('-inf'), 3, '流塑'), (3, 5, '软塑'), (5, 15, '可塑'),
-    (15, 20, '硬塑'), (20, float('inf'), '坚硬'),
-]  # 与 工程配置.toml「A类.标贯N_可塑性」对齐（≤3/4~5/6~15/16~20/≥21，半开区间）
+    (float('-inf'), 3, '流塑'), (4, 5, '软塑'), (6, 15, '可塑'),
+    (16, 20, '硬塑'), (21, float('inf'), '坚硬'),
+]  # 与 工程配置.toml「A类.标贯N_可塑性」键语义完全一致（≤3/4~5/6~15/16~20/≥21），
+# 保留整数边界空隙（(3,4)/(5,6)/(15,16)/(20,21)）——P3-2：修复前 legacy 为连续闭区间
+# 表，TOML 模式下浮点修正击数落入空隙返回 None，回退模式却给"软塑/可塑"等，两模式口径
+# 不一致；现回退表同步留空隙（N=3.5 等同样返回 None，由调用方跳过）
 LEGACY_SPT_PLASTICITY_B = [
     (float('-inf'), 2, '流塑'), (2, 8, '软塑'),
     (8, 32, '硬塑'), (32, float('inf'), '坚硬'),
@@ -39,7 +42,6 @@ LEGACY_VERTICAL_THIN_LAYER_DENSE = 1.0
 # =============================================================================
 # TOML → 内部格式 解析工具
 # =============================================================================
-import re
 
 def _parse_toml_range(toml_dict):
     """把 TOML 的 {≤10:松散, 11~15:稍密, ≥31:密实} 转成区间列表 [(lo,hi,state)]
@@ -49,15 +51,21 @@ def _parse_toml_range(toml_dict):
       - `11~15`       → [11, 15]（闭区间）
       - `≥31`/`>=31`  → [31, +∞)
       - `0<IL≤0.25`   → (0, 0.25]（IL 键专用形式，按两侧不等式边界解析）
+      - `IL≥1.0`/`IL>1.0` → (1.0, +∞)（P1-⑧：原实现漏解析中文 ≥，键被静默丢弃）
+      - `IL<0.25`     → (-∞, 0.25)（严格小于，与 `≤0.25` 含端点区分；开边界用
+        2×IL_EPSILON 内缩实现，与调用方 `lo-eps < x <= hi+eps` 判定配合）
     "与上一区间上界的衔接"由 TOML 键本身保证（如 `≤10` + `10~15` + `≥30`）；
     相邻键之间的间隙不再被静默吸收：间隙内的值不命中任何区间（调用方按 None 安全跳过），
     避免把显式 `≥31` 静默改写成 >上一区间上界（否则 N=16~30 会被误判）。
-    解析失败的行跳过（防御式）。
+    解析失败的行跳过（防御式）；状态值为 list/dict（用户误写数组）也跳过（P3-16，
+    避免 PLASTICITY_ORDER.get(list) 抛 TypeError）。
     """
     result = []
     for k, v in toml_dict.items():
         if k == '用途':
             continue
+        if isinstance(v, (list, dict)):
+            continue  # 状态值必须是标量字符串
         k = k.strip()
         lo, hi = None, None
         try:
@@ -72,20 +80,31 @@ def _parse_toml_range(toml_dict):
                 lo = float(parts[0])
                 hi = float(parts[1])
             elif 'IL' in k:
-                # 液性指数键形式：IL≤0 / 0<IL≤0.25 / IL>1.0（无 '~'）
-                hi_m = re.search(r'[≤<]([\d.]+)$', k)
-                lo_m = re.search(r'^([\d.]+)', k)
-                gt_m = re.search(r'[>]([\d.]+)$', k)
+                # 液性指数键形式：IL≤0 / 0<IL≤0.25 / IL>1.0 / IL≥1.0 / IL<0.25（无 '~'）
+                hi_m = re.search(r'([≤<])([\d.]+)$', k)
+                lo_gt_m = re.search(r'^([\d.]+)\s*<', k)       # "0<IL" 严格大于
+                lo_le_m = re.search(r'^([\d.]+)\s*≤', k)      # "0≤IL" 含端点
+                gt_m = re.search(r'[>≥]([\d.]+)$', k)
                 if hi_m:
-                    hi = float(hi_m.group(1))
-                    lo = float(lo_m.group(1)) if lo_m else float('-inf')
+                    hi = float(hi_m.group(2))
+                    if hi_m.group(1) == '<':
+                        hi = hi - 2 * IL_EPSILON  # 严格小于（开边界）
+                    if lo_gt_m:
+                        lo = float(lo_gt_m.group(1)) + 2 * IL_EPSILON  # 严格大于
+                    elif lo_le_m:
+                        lo = float(lo_le_m.group(1))
+                    else:
+                        lo = float('-inf')
                 elif gt_m:
-                    # "IL>1.0"：> 下限 → (1.0, inf)（原实现漏解析该键）
+                    # "IL>1.0"/"IL≥1.0"：> 下限 → (1.0, inf)（原实现漏解析中文 ≥）
                     lo = float(gt_m.group(1))
                     hi = float('inf')
-                elif lo_m:
-                    # 形如 "1.0<IL"（防御写法）
-                    lo = float(lo_m.group(1))
+                elif lo_gt_m:
+                    # 形如 "1.0<IL"（防御写法）：严格大于
+                    lo = float(lo_gt_m.group(1)) + 2 * IL_EPSILON
+                    hi = float('inf')
+                elif lo_le_m:
+                    lo = float(lo_le_m.group(1))
                     hi = float('inf')
             elif k.startswith('>'):
                 lo = float(k[1:])
@@ -100,8 +119,20 @@ def _parse_toml_range(toml_dict):
 
 
 def _parse_toml_range_to_single(toml_dict):
-    """把 TOML 的 {松散=1, 稍密=2, ...} 转成 {松散:1, ...}"""
-    return {k: int(v) for k, v in toml_dict.items() if k != '用途'}
+    """把 TOML 的 {松散=1, 稍密=2, ...} 转成 {松散:1, ...}
+
+    值无法转 int（如 "2.5" 字符串）时跳过该键（P1-⑤：修复前 import 期 int(v)
+    直接抛 ValueError 崩掉整个模块）。
+    """
+    out = {}
+    for k, v in toml_dict.items():
+        if k == '用途':
+            continue
+        try:
+            out[k] = int(v)
+        except (ValueError, TypeError):
+            continue
+    return out
 
 
 def parse_domain_condition(cond):
@@ -140,19 +171,21 @@ def parse_domain_condition(cond):
 # 加载 TOML 配置，构建运行时常量
 # =============================================================================
 def _load_toml(path):
-    """尝试用 tomllib(Python3.11+) 或 tomli(Python3.8+) 读取 TOML"""
-    try:
-        import tomllib
-        with open(path, 'rb') as f:
-            return tomllib.load(f)
-    except ImportError:
-        pass
-    try:
-        import tomli
-        with open(path, 'rb') as f:
-            return tomli.load(f)
-    except ImportError:
-        pass
+    """尝试用 tomllib(Python3.11+) 或 tomli(Python3.8+) 读取 TOML
+
+    解析失败（TOMLDecodeError）与 IO 异常一律返回 None（不抛出）——
+    修复前 TOML 存在但语法错误（参数中心编辑遗留半个引号等）会击穿
+    load_project_config 使整个模块 import 崩溃、后端无法启动（P0-④）。
+    """
+    for _mod in ('tomllib', 'tomli'):
+        try:
+            loader = __import__(_mod)
+            with open(path, 'rb') as f:
+                return loader.load(f)
+        except ImportError:
+            continue
+        except Exception:
+            return None
     return None
 
 
@@ -208,9 +241,11 @@ def load_project_config():
                 '段': 'JSON', '状态': '默认',
                 '详情': f'工程配置.json 解析失败: {e}'})
 
+    # 均失败：返回空 dict 供调用方安全使用，但【不缓存】——
+    # 保持 _PROJECT_CONFIG=None 使下次调用重试（P2-8：修复前把 {} 永久缓存，
+    # 瞬时故障（文件被占用/杀软锁）会导致整个进程生命周期内配置恒为空）。
     _CONFIG_LOAD_LOG['TOML状态'] = '不存在，使用内置默认值'
-    _PROJECT_CONFIG = {}
-    return _PROJECT_CONFIG
+    return {}
 
 
 # 配置加载日志（全局，供 GUI 启动时读取）
@@ -243,180 +278,220 @@ def get_config_summary():
         summary += f" | 默认值段: {', '.join(missing)}"
     return summary
 
-_cfg_data = load_project_config()
+def _build_state_maps():
+    """重建 标贯/动探→密实度、IL/N→可塑性、N→风化程度、顺序、纵向检查 常量"""
+    global _cfg_data
+    global SPT_DENSITY_MAP, DPT_DENSITY_MAP
+    global IL_PLASTICITY_A, IL_PLASTICITY_B
+    global SPT_PLASTICITY_A, SPT_PLASTICITY_B
+    global SPT_WEATHERING_A, SPT_WEATHERING_B
+    global DENSITY_ORDER, PLASTICITY_ORDER, VERTICAL_THIN_LAYER_DENSE
+    _cfg_data = load_project_config()
 
-# ---- 标贯/动探→密实度 ----
-_tmp = _cfg_data.get('公用', {}).get('标贯N_密实度', {})
-if _tmp:
-    SPT_DENSITY_MAP = _parse_toml_range(_tmp)
-    log_config_load('公用.标贯N_密实度', 'TOML')
-else:
-    SPT_DENSITY_MAP = list(LEGACY_SPT_DENSITY_MAP)
-    log_config_load('公用.标贯N_密实度', '默认')
+    # ---- 标贯/动探→密实度 ----
+    _tmp = _cfg_data.get('公用', {}).get('标贯N_密实度', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        SPT_DENSITY_MAP = _parsed
+        log_config_load('公用.标贯N_密实度', 'TOML')
+    else:
+        SPT_DENSITY_MAP = list(LEGACY_SPT_DENSITY_MAP)
+        log_config_load('公用.标贯N_密实度', '默认')
 
-_tmp = _cfg_data.get('公用', {}).get('动探N63_5_密实度', {})
-if _tmp:
-    DPT_DENSITY_MAP = _parse_toml_range(_tmp)
-    log_config_load('公用.动探N63_5_密实度', 'TOML')
-else:
-    DPT_DENSITY_MAP = list(LEGACY_DPT_DENSITY_MAP)
-    log_config_load('公用.动探N63_5_密实度', '默认')
+    _tmp = _cfg_data.get('公用', {}).get('动探N63_5_密实度', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        DPT_DENSITY_MAP = _parsed
+        log_config_load('公用.动探N63_5_密实度', 'TOML')
+    else:
+        DPT_DENSITY_MAP = list(LEGACY_DPT_DENSITY_MAP)
+        log_config_load('公用.动探N63_5_密实度', '默认')
 
-# ---- IL→可塑性 ----
-_tmp = _cfg_data.get('A类', {}).get('液性指数IL_可塑性', {})
-if _tmp:
-    IL_PLASTICITY_A = _parse_toml_range(_tmp)
-    log_config_load('A类.液性指数IL_可塑性', 'TOML')
-else:
-    IL_PLASTICITY_A = list(LEGACY_IL_PLASTICITY_A)
-    log_config_load('A类.液性指数IL_可塑性', '默认')
+    # ---- IL→可塑性 ----
+    _tmp = _cfg_data.get('A类', {}).get('液性指数IL_可塑性', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        IL_PLASTICITY_A = _parsed
+        log_config_load('A类.液性指数IL_可塑性', 'TOML')
+    else:
+        IL_PLASTICITY_A = list(LEGACY_IL_PLASTICITY_A)
+        log_config_load('A类.液性指数IL_可塑性', '默认')
 
-_tmp = _cfg_data.get('B类', {}).get('液性指数IL_可塑性', {})
-if _tmp:
-    IL_PLASTICITY_B = _parse_toml_range(_tmp)
-    log_config_load('B类.液性指数IL_可塑性', 'TOML')
-else:
-    IL_PLASTICITY_B = list(LEGACY_IL_PLASTICITY_B)
-    log_config_load('B类.液性指数IL_可塑性', '默认')
+    _tmp = _cfg_data.get('B类', {}).get('液性指数IL_可塑性', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        IL_PLASTICITY_B = _parsed
+        log_config_load('B类.液性指数IL_可塑性', 'TOML')
+    else:
+        IL_PLASTICITY_B = list(LEGACY_IL_PLASTICITY_B)
+        log_config_load('B类.液性指数IL_可塑性', '默认')
 
-# ---- N→可塑性 ----
-_tmp = _cfg_data.get('A类', {}).get('标贯N_可塑性', {})
-if _tmp:
-    SPT_PLASTICITY_A = _parse_toml_range(_tmp)
-    log_config_load('A类.标贯N_可塑性', 'TOML')
-else:
-    SPT_PLASTICITY_A = list(LEGACY_SPT_PLASTICITY_A)
-    log_config_load('A类.标贯N_可塑性', '默认')
+    # ---- N→可塑性 ----
+    _tmp = _cfg_data.get('A类', {}).get('标贯N_可塑性', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        SPT_PLASTICITY_A = _parsed
+        log_config_load('A类.标贯N_可塑性', 'TOML')
+    else:
+        SPT_PLASTICITY_A = list(LEGACY_SPT_PLASTICITY_A)
+        log_config_load('A类.标贯N_可塑性', '默认')
 
-_tmp = _cfg_data.get('B类', {}).get('标贯N_可塑性', {})
-if _tmp:
-    SPT_PLASTICITY_B = _parse_toml_range(_tmp)
-    log_config_load('B类.标贯N_可塑性', 'TOML')
-else:
-    SPT_PLASTICITY_B = list(LEGACY_SPT_PLASTICITY_B)
-    log_config_load('B类.标贯N_可塑性', '默认')
+    _tmp = _cfg_data.get('B类', {}).get('标贯N_可塑性', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        SPT_PLASTICITY_B = _parsed
+        log_config_load('B类.标贯N_可塑性', 'TOML')
+    else:
+        SPT_PLASTICITY_B = list(LEGACY_SPT_PLASTICITY_B)
+        log_config_load('B类.标贯N_可塑性', '默认')
 
-# ---- N→风化程度 ----
-_tmp = _cfg_data.get('A类', {}).get('标贯N_风化程度', {})
-if _tmp:
-    SPT_WEATHERING_A = _parse_toml_range(_tmp)
-    log_config_load('A类.标贯N_风化程度', 'TOML')
-else:
-    SPT_WEATHERING_A = list(LEGACY_SPT_WEATHERING_A)
-    log_config_load('A类.标贯N_风化程度', '默认')
+    # ---- N→风化程度 ----
+    _tmp = _cfg_data.get('A类', {}).get('标贯N_风化程度', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        SPT_WEATHERING_A = _parsed
+        log_config_load('A类.标贯N_风化程度', 'TOML')
+    else:
+        SPT_WEATHERING_A = list(LEGACY_SPT_WEATHERING_A)
+        log_config_load('A类.标贯N_风化程度', '默认')
 
-_tmp = _cfg_data.get('B类', {}).get('标贯N_风化程度', {})
-if _tmp:
-    SPT_WEATHERING_B = _parse_toml_range(_tmp)
-    log_config_load('B类.标贯N_风化程度', 'TOML')
-else:
-    SPT_WEATHERING_B = list(LEGACY_SPT_WEATHERING_B)
-    log_config_load('B类.标贯N_风化程度', '默认')
+    _tmp = _cfg_data.get('B类', {}).get('标贯N_风化程度', {})
+    _parsed = _parse_toml_range(_tmp) if isinstance(_tmp, dict) else []
+    if _parsed:  # 解析后非空才用（段内只剩「用途」时回落默认，P2-1）
+        SPT_WEATHERING_B = _parsed
+        log_config_load('B类.标贯N_风化程度', 'TOML')
+    else:
+        SPT_WEATHERING_B = list(LEGACY_SPT_WEATHERING_B)
+        log_config_load('B类.标贯N_风化程度', '默认')
 
-# ---- 顺序映射 ----
-_tmp = _cfg_data.get('公用', {}).get('密实度顺序', {})
-if _tmp:
-    DENSITY_ORDER = _parse_toml_range_to_single(_tmp)
-    log_config_load('公用.密实度顺序', 'TOML')
-else:
-    DENSITY_ORDER = dict(LEGACY_DENSITY_ORDER)
-    log_config_load('公用.密实度顺序', '默认')
+    # ---- 顺序映射 ----
+    _tmp = _cfg_data.get('公用', {}).get('密实度顺序', {})
+    _parsed = _parse_toml_range_to_single(_tmp) if isinstance(_tmp, dict) else {}
+    if _parsed:
+        DENSITY_ORDER = _parsed
+        log_config_load('公用.密实度顺序', 'TOML')
+    else:
+        DENSITY_ORDER = dict(LEGACY_DENSITY_ORDER)
+        log_config_load('公用.密实度顺序', '默认')
 
-_tmp = _cfg_data.get('公用', {}).get('塑性顺序', {})
-if _tmp:
-    PLASTICITY_ORDER = _parse_toml_range_to_single(_tmp)
-    log_config_load('公用.塑性顺序', 'TOML')
-else:
-    PLASTICITY_ORDER = dict(LEGACY_PLASTICITY_ORDER)
-    log_config_load('公用.塑性顺序', '默认')
+    _tmp = _cfg_data.get('公用', {}).get('塑性顺序', {})
+    _parsed = _parse_toml_range_to_single(_tmp) if isinstance(_tmp, dict) else {}
+    if _parsed:
+        PLASTICITY_ORDER = _parsed
+        log_config_load('公用.塑性顺序', 'TOML')
+    else:
+        PLASTICITY_ORDER = dict(LEGACY_PLASTICITY_ORDER)
+        log_config_load('公用.塑性顺序', '默认')
 
-# ---- 纵向检查参数 ----
-_tmp = _cfg_data.get('公用', {}).get('纵向检查', {})
-if _tmp:
-    VERTICAL_THIN_LAYER_DENSE = float(_tmp.get('砂土纵向检查最小厚度', LEGACY_VERTICAL_THIN_LAYER_DENSE))
-    log_config_load('公用.纵向检查', 'TOML')
-else:
-    VERTICAL_THIN_LAYER_DENSE = LEGACY_VERTICAL_THIN_LAYER_DENSE
-    log_config_load('公用.纵向检查', '默认')
+    # ---- 纵向检查参数 ----
+    _tmp = _cfg_data.get('公用', {}).get('纵向检查', {})
+    if _tmp:
+        try:  # P1-5：非法值（非数值字符串）不崩模块，回落默认
+            VERTICAL_THIN_LAYER_DENSE = float(_tmp.get('砂土纵向检查最小厚度', LEGACY_VERTICAL_THIN_LAYER_DENSE))
+            log_config_load('公用.纵向检查', 'TOML')
+        except (ValueError, TypeError):
+            VERTICAL_THIN_LAYER_DENSE = LEGACY_VERTICAL_THIN_LAYER_DENSE
+            log_config_load('公用.纵向检查', '默认', '最小厚度解析失败')
+    else:
+        VERTICAL_THIN_LAYER_DENSE = LEGACY_VERTICAL_THIN_LAYER_DENSE
+        log_config_load('公用.纵向检查', '默认')
 
-# ---- 岩土分类集 ----
-_CAVE_KEYS = {'溶洞/洞穴', '溶洞', '洞穴'}
-_MUCK_KEYS = {'淤泥/软土'}
-_CLAY_KEYS = {'黏性土'}
-_SILT_KEYS = {'粉土'}
-_SAND_KEYS = {'砂土'}
-_GRAVEL_KEYS = {'碎石土'}
-_FILL_KEYS = {'填土'}
-_ROCK_KEYS = {'岩石'}
-_SALINE_KEYS = {'盐渍土'}
-_FROZEN_KEYS = {'冻土/冰', '冻土'}
-_LOESS_KEYS = {'黄土', '湿陷性黄土', '新黄土', '老黄土'}  # S4 内置默认词（TOML 未含黄土键时兜底）
+def _build_lithology_sets():
+    """重建 岩土分类集合（CAVITY/MUCK/CLAY/.../LOESS_TYPES）"""
+    global CAVITY_TYPES, MUCK_TYPES, CLAY_TYPES, SILT_TYPES, SAND_TYPES
+    global GRAVEL_TYPES, FILL_TYPES, ROCK_TYPES, SALINE_TYPES, FROZEN_TYPES, LOESS_TYPES
 
-_tmp_lith = _cfg_data.get('岩土分类', {})
-if _tmp_lith:
-    CAVITY_TYPES = set()
-    for k, v in _tmp_lith.items():
-        if any(x in k for x in ('溶洞', '洞穴')):
-            CAVITY_TYPES.update(v)
-    MUCK_TYPES = set(_tmp_lith.get('淤泥/软土', []))
-    CLAY_TYPES = set(_tmp_lith.get('黏性土', []))
-    SILT_TYPES = set(_tmp_lith.get('粉土', []))
-    SAND_TYPES = set(_tmp_lith.get('砂土', []))
-    GRAVEL_TYPES = set(_tmp_lith.get('碎石土', []))
-    FILL_TYPES = set(_tmp_lith.get('填土', []))
-    ROCK_TYPES = set(_tmp_lith.get('岩石', []))
-    SALINE_TYPES = set(_tmp_lith.get('盐渍土', []))
-    # V2.2.5（E1）：TOML 岩土分类键为 '冻土'（历史 V2.1.3 引入的键名失配——代码只读
-    # '冻土/冰' 导致 FROZEN_TYPES 为空、冻土被归 'other'、R-CRS-011 成死规则）。
-    # 代码兼容双键（'冻土/冰' 与 '冻土' 均读取并取并集），不动用户 TOML。
-    FROZEN_TYPES = set()
-    for _fk in ('冻土/冰', '冻土'):
-        FROZEN_TYPES.update(_tmp_lith.get(_fk, []))
-    # V3.0.3（S4）：黄土纳入岩土分类识别 → 'loess'（修复前 '黄土' 落 'other'）。
-    # 依据：黄土为特殊土（GB50021-2001 第6章 湿陷性土；GB50025-2018 湿陷性黄土地区
-    # 建筑规范；手册\岩土工程勘察手册 第1章 湿陷性土），湿陷性评价需专项数据
-    # （δs/δzs），暂不参与密实度/可塑性规则——rule_engine 各分支均不含 loess，
-    # 黄土层不触发 sand/clay 规则，行为与修复前 'other' 完全一致（合规审查 Agent3-S4）。
-    # TOML 本轮仅允许新增「动探杆长偏移」，未加"黄土"键，故内置默认词兜底保证识别，
-    # 后续可在 [岩土分类] 增加 "黄土" 键覆盖扩充（取并集，不冲突）。
-    # 取并集：TOML 若有 "黄土" 键可扩充，内置默认词保证 湿陷性黄土/新黄土/老黄土 也识别
-    LOESS_TYPES = set(_tmp_lith.get('黄土', [])) | _LOESS_KEYS
-else:
-    CAVITY_TYPES = {'溶洞', '土洞', '溶洞1', '溶洞2', '溶洞3', '土洞1', '土洞2', '土洞3',
-                    '溶洞无填充', '溶洞无充填', '溶洞半填充', '溶洞半充填',
-                    '溶洞全填充', '溶洞全充填', '土洞无填充', '土洞无充填',
-                    '土洞半填充', '土洞半充填', '土洞全填充', '土洞全充填',
-                    '岩溶化灰岩'}
-    log_config_load('岩土分类', '默认')
-    MUCK_TYPES = {'淤泥', '淤泥质土', '淤泥质黏土', '淤泥质粉质黏土', '软土', '软黏性土', '泥炭', '泥炭质土'}
-    CLAY_TYPES = {'黏土', '粉质黏土', '黏土夹粉土', '粉质黏土夹粉土', '红黏土'}
-    SILT_TYPES = {'粉土', '砂质粉土', '黏质粉土'}
-    SAND_TYPES = {'细砂', '中砂', '粗砂', '砾砂', '粉砂'}
-    GRAVEL_TYPES = {'圆砾', '角砾', '卵石', '碎石', '漂石', '块石'}
-    FILL_TYPES = {'杂填土', '素填土', '冲填土', '压实填土'}
-    ROCK_TYPES = {'花岗岩', '石灰岩', '砂岩', '大理岩', '玄武岩', '片麻岩', '石英岩', '泥岩', '页岩', '粉砂岩', '黏土岩', '全风化岩', '强风化岩', '中风化岩', '微风化岩'}
-    SALINE_TYPES = {'盐渍土', '氯盐渍土', '硫酸盐渍土', '碳酸盐渍土'}
-    FROZEN_TYPES = {'冻土', '多年冻土', '季节冻土'}
-    # V3.0.3（S4）：默认集兜底（无 TOML 岩土分类时），与 if 分支内置默认词一致
-    LOESS_TYPES = set(_LOESS_KEYS)
+    def _as_list(v):
+        # P2-2：TOML 值为单字符串（用户误写）时 set.update 会按字符拆散
+        # （'溶洞' → {'溶','洞'} 致 classify_lithology 落 other），统一包装为列表
+        if isinstance(v, (list, tuple, set)):
+            return list(v)
+        if v is None:
+            return []
+        return [v]
 
-# 子类按 ①/② 半开区间 [min,max) 归属（边界归上档，V3.0.3 Agent1-7）
-_soft_soil_raw = _cfg_data.get('B类', {}).get('软土分类', {})
-if _soft_soil_raw:
-    SOFT_SOIL_CLASSIFICATION = {}
-    for name, criteria in _soft_soil_raw.items():
-        SOFT_SOIL_CLASSIFICATION[name] = {
-            'wu_min': criteria.get('wu最小', 0),
-            'wu_max': criteria.get('wu最大', 100),
-            'e_min': criteria.get('e最小', 0),
-            'e_max': criteria.get('e最大', 999),
-            'hsl_condition': criteria.get('hsl条件', False),
-            'required_count': criteria.get('需要满足条件数', 2),
-        }
-    log_config_load('B类.软土分类', 'TOML', f'{len(SOFT_SOIL_CLASSIFICATION)}个子类')
-else:
-    SOFT_SOIL_CLASSIFICATION = {}
-    log_config_load('B类.软土分类', '默认', '未配置')
+    # ---- 岩土分类集 ----
+    _CAVE_KEYS = {'溶洞/洞穴', '溶洞', '洞穴'}
+    _MUCK_KEYS = {'淤泥/软土'}
+    _CLAY_KEYS = {'黏性土'}
+    _SILT_KEYS = {'粉土'}
+    _SAND_KEYS = {'砂土'}
+    _GRAVEL_KEYS = {'碎石土'}
+    _FILL_KEYS = {'填土'}
+    _ROCK_KEYS = {'岩石'}
+    _SALINE_KEYS = {'盐渍土'}
+    _FROZEN_KEYS = {'冻土/冰', '冻土'}
+    _LOESS_KEYS = {'黄土', '湿陷性黄土', '新黄土', '老黄土'}  # S4 内置默认词（TOML 未含黄土键时兜底）
+
+    _tmp_lith = _cfg_data.get('岩土分类', {})
+    if _tmp_lith:
+        CAVITY_TYPES = set()
+        for k, v in _tmp_lith.items():
+            if any(x in k for x in ('溶洞', '洞穴')):
+                CAVITY_TYPES.update(_as_list(v))
+        MUCK_TYPES = set(_as_list(_tmp_lith.get('淤泥/软土')))
+        CLAY_TYPES = set(_as_list(_tmp_lith.get('黏性土')))
+        SILT_TYPES = set(_as_list(_tmp_lith.get('粉土')))
+        SAND_TYPES = set(_as_list(_tmp_lith.get('砂土')))
+        GRAVEL_TYPES = set(_as_list(_tmp_lith.get('碎石土')))
+        FILL_TYPES = set(_as_list(_tmp_lith.get('填土')))
+        ROCK_TYPES = set(_as_list(_tmp_lith.get('岩石')))
+        SALINE_TYPES = set(_as_list(_tmp_lith.get('盐渍土')))
+        # V2.2.5（E1）：TOML 岩土分类键为 '冻土'（历史 V2.1.3 引入的键名失配——代码只读
+        # '冻土/冰' 导致 FROZEN_TYPES 为空、冻土被归 'other'、R-CRS-011 成死规则）。
+        # 代码兼容双键（'冻土/冰' 与 '冻土' 均读取并取并集），不动用户 TOML。
+        FROZEN_TYPES = set()
+        for _fk in ('冻土/冰', '冻土'):
+            FROZEN_TYPES.update(_as_list(_tmp_lith.get(_fk)))
+        # V3.0.3（S4）：黄土纳入岩土分类识别 → 'loess'（修复前 '黄土' 落 'other'）。
+        # 依据：黄土为特殊土（GB50021-2001 第6章 湿陷性土；GB50025-2018 湿陷性黄土地区
+        # 建筑规范；手册\岩土工程勘察手册 第1章 湿陷性土），湿陷性评价需专项数据
+        # （δs/δzs），暂不参与密实度/可塑性规则——rule_engine 各分支均不含 loess，
+        # 黄土层不触发 sand/clay 规则，行为与修复前 'other' 完全一致（合规审查 Agent3-S4）。
+        # TOML 本轮仅允许新增「动探杆长偏移」，未加"黄土"键，故内置默认词兜底保证识别，
+        # 后续可在 [岩土分类] 增加 "黄土" 键覆盖扩充（取并集，不冲突）。
+        # 取并集：TOML 若有 "黄土" 键可扩充，内置默认词保证 湿陷性黄土/新黄土/老黄土 也识别
+        LOESS_TYPES = set(_as_list(_tmp_lith.get('黄土'))) | _LOESS_KEYS
+    else:
+        CAVITY_TYPES = {'溶洞', '土洞', '溶洞1', '溶洞2', '溶洞3', '土洞1', '土洞2', '土洞3',
+                        '溶洞无填充', '溶洞无充填', '溶洞半填充', '溶洞半充填',
+                        '溶洞全填充', '溶洞全充填', '土洞无填充', '土洞无充填',
+                        '土洞半填充', '土洞半充填', '土洞全填充', '土洞全充填',
+                        '岩溶化灰岩'}
+        log_config_load('岩土分类', '默认')
+        MUCK_TYPES = {'淤泥', '淤泥质土', '淤泥质黏土', '淤泥质粉质黏土', '软土', '软黏性土', '泥炭', '泥炭质土'}
+        # P3-14：补充异体字 '粘土'（理正库常见写法），缺省时不再落 'other'
+        CLAY_TYPES = {'黏土', '粘土', '粉质黏土', '黏土夹粉土', '粉质黏土夹粉土', '红黏土'}
+        SILT_TYPES = {'粉土', '砂质粉土', '黏质粉土'}
+        SAND_TYPES = {'细砂', '中砂', '粗砂', '砾砂', '粉砂'}
+        GRAVEL_TYPES = {'圆砾', '角砾', '卵石', '碎石', '漂石', '块石'}
+        FILL_TYPES = {'杂填土', '素填土', '冲填土', '压实填土'}
+        ROCK_TYPES = {'花岗岩', '石灰岩', '砂岩', '大理岩', '玄武岩', '片麻岩', '石英岩', '泥岩', '页岩', '粉砂岩', '黏土岩', '全风化岩', '强风化岩', '中风化岩', '微风化岩'}
+        SALINE_TYPES = {'盐渍土', '氯盐渍土', '硫酸盐渍土', '碳酸盐渍土'}
+        FROZEN_TYPES = {'冻土', '多年冻土', '季节冻土'}
+        # V3.0.3（S4）：默认集兜底（无 TOML 岩土分类时），与 if 分支内置默认词一致
+        LOESS_TYPES = set(_LOESS_KEYS)
+
+def _build_soft_soil():
+    """重建 B类软土分类判定表"""
+    global SOFT_SOIL_CLASSIFICATION
+    # 子类按 ①/② 半开区间 [min,max) 归属（边界归上档，V3.0.3 Agent1-7）
+    _soft_soil_raw = _cfg_data.get('B类', {}).get('软土分类', {})
+    if _soft_soil_raw:
+        SOFT_SOIL_CLASSIFICATION = {}
+        for name, criteria in _soft_soil_raw.items():
+            SOFT_SOIL_CLASSIFICATION[name] = {
+                'wu_min': criteria.get('wu最小', 0),
+                'wu_max': criteria.get('wu最大', 100),
+                'e_min': criteria.get('e最小', 0),
+                'e_max': criteria.get('e最大', 999),
+                'hsl_condition': criteria.get('hsl条件', False),
+                'required_count': criteria.get('需要满足条件数', 2),
+            }
+        log_config_load('B类.软土分类', 'TOML', f'{len(SOFT_SOIL_CLASSIFICATION)}个子类')
+    else:
+        SOFT_SOIL_CLASSIFICATION = {}
+        log_config_load('B类.软土分类', '默认', '未配置')
 
 
 def classify_soft_soil(wu, e, hsl, yx, proj_type='B'):
@@ -445,7 +520,10 @@ def classify_soft_soil(wu, e, hsl, yx, proj_type='B'):
     """
     if proj_type != 'B' or not SOFT_SOIL_CLASSIFICATION:
         return None
-    wu, e, hsl, yx = float(wu), float(e), float(hsl), float(yx)
+    # P2-9：None/非数值入参防御（修复前 float(None) 抛 TypeError）
+    wu, e, hsl, yx = (_coerce_spt_n(x) for x in (wu, e, hsl, yx))
+    if any(v is None for v in (wu, e, hsl, yx)):
+        return None
     # 软土必要条件：e≥1.0 且 w>wL（GB 50021 6.3.1；不满足直接返回 None，
     # 不再按 TOML"需要满足条件数"三选二——该键保留仅为历史配置兼容，不再参与判定）
     if e < 1.0 or hsl <= yx:
@@ -454,8 +532,9 @@ def classify_soft_soil(wu, e, hsl, yx, proj_type='B'):
     for i, name in enumerate(names):
         c = SOFT_SOIL_CLASSIFICATION[name]
         # 半开语义 [min,max)：上界归下一档（wu=3→淤泥质土、e=1.5→淤泥）；
-        # 最后一个子类（泥炭）的 wu/e 上界为自然上限（wu=100 / e 无上界占位），含端点
-        last = (i == len(names) - 1)
+        # P3-11：末档判定不再依赖 TOML 键顺序——上限为自然上界占位
+        # （wu最大=100 / e最大≥999）即视为含端点，顺序调整不影响边界语义
+        last = (c['wu_max'] >= 100 or c['e_max'] >= 999)
         wu_ok = c['wu_min'] <= wu and (wu <= c['wu_max'] if last else wu < c['wu_max'])
         e_ok = c['e_min'] <= e and (e <= c['e_max'] if last else e < c['e_max'])
         if wu_ok and e_ok:
@@ -464,29 +543,41 @@ def classify_soft_soil(wu, e, hsl, yx, proj_type='B'):
 
 
 
-# ---- A类标贯杆长修正系数（GB50021-2001）：TOML 可配置，无配置回退硬编码表 ----
-_tmp_spt_a = _cfg_data.get('公用', {}).get('标贯杆长修正_A类', {})
-SPT_ROD_CORRECTION_A = []
-if _tmp_spt_a:
-    _items = []
-    for _k, _v in _tmp_spt_a.items():
-        if _k == '用途':
-            continue
-        try:
-            _items.append((float(str(_k).replace('m', '')), float(_v)))
-        except (ValueError, TypeError):
-            continue
-    _items.sort()
-    if len(_items) >= 2:
-        SPT_ROD_CORRECTION_A = _items
-        log_config_load('公用.标贯杆长修正_A类', 'TOML', f'{len(_items)}档')
-    else:
-        log_config_load('公用.标贯杆长修正_A类', '默认', 'TOML档数不足')
-if not SPT_ROD_CORRECTION_A:
-    SPT_ROD_CORRECTION_A = [(3, 1.00), (6, 0.92), (9, 0.86),
-                            (12, 0.81), (15, 0.77), (18, 0.73), (21, 0.70)]
-    if not _tmp_spt_a:
-        log_config_load('公用.标贯杆长修正_A类', '默认')
+def _build_spt_rod():
+    """重建 A类标贯杆长修正系数表"""
+    global SPT_ROD_CORRECTION_A
+    # ---- A类标贯杆长修正系数（GB50021-2001）：TOML 可配置，无配置回退硬编码表 ----
+    _tmp_spt_a = _cfg_data.get('公用', {}).get('标贯杆长修正_A类', {})
+    SPT_ROD_CORRECTION_A = []
+    if _tmp_spt_a:
+        _items = []
+        for _k, _v in _tmp_spt_a.items():
+            if _k == '用途':
+                continue
+            try:
+                _items.append((float(str(_k).replace('m', '')), float(_v)))
+            except (ValueError, TypeError):
+                continue
+        _items.sort()
+        # P2-6：同值双档去重（'6m' 与 '6' 解析为同一 6.0 → 插值 l2-l1=0 除零），
+        # 重复档位取后者（覆盖语义），保证严格递增
+        _dedup = []
+        for _l, _c in _items:
+            if _dedup and _dedup[-1][0] == _l:
+                _dedup[-1] = (_l, _c)
+            else:
+                _dedup.append((_l, _c))
+        _items = _dedup
+        if len(_items) >= 2:
+            SPT_ROD_CORRECTION_A = _items
+            log_config_load('公用.标贯杆长修正_A类', 'TOML', f'{len(_items)}档')
+        else:
+            log_config_load('公用.标贯杆长修正_A类', '默认', 'TOML档数不足')
+    if not SPT_ROD_CORRECTION_A:
+        SPT_ROD_CORRECTION_A = [(3, 1.00), (6, 0.92), (9, 0.86),
+                                (12, 0.81), (15, 0.77), (18, 0.73), (21, 0.70)]
+        if not _tmp_spt_a:
+            log_config_load('公用.标贯杆长修正_A类', '默认')
 
 
 def spt_correction_gb50021(L: float) -> float:
@@ -505,42 +596,74 @@ def spt_correction_gb50021(L: float) -> float:
             return a1 + (a2 - a1) * (L - l1) / (l2 - l1)
     return table[-1][1]
 
-# 动探 N63.5 杆长修正系数（GB50021-2001）
-# 杆长 L 与击数 N 轴可由 TOML「公用.动探杆长修正_A类」覆盖（无配置回退硬编码）；
-# 系数矩阵 α[N_idx][L_idx] 为 GB50021-2001 附录B 表B.0.1 固定值（TOML 不含矩阵），
-# 覆盖 L/N 时须保持与矩阵维度一致（10×10），否则回退默认轴。
-DPT_ROD_L = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
-DPT_ROD_N = [1, 5, 10, 15, 20, 25, 30, 35, 40, 50]
-DPT_ROD_ALPHA = [
-    [1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00],
-    [1.00,0.96,0.93,0.90,0.88,0.85,0.82,0.79,0.77,0.75],
-    [1.00,0.95,0.90,0.86,0.83,0.79,0.76,0.73,0.70,0.67],
-    [1.00,0.93,0.88,0.83,0.79,0.75,0.71,0.67,0.63,0.59],
-    [1.00,0.92,0.85,0.80,0.75,0.70,0.66,0.62,0.57,0.53],
-    [1.00,0.90,0.83,0.77,0.72,0.67,0.62,0.57,0.53,0.48],
-    [1.00,0.89,0.81,0.75,0.69,0.64,0.58,0.54,0.49,0.44],
-    [1.00,0.87,0.79,0.73,0.67,0.61,0.56,0.51,0.46,0.41],
-    [1.00,0.86,0.78,0.71,0.64,0.59,0.53,0.48,0.43,0.39],
-    [1.00,0.84,0.75,0.67,0.61,0.55,0.50,0.45,0.40,0.36],
-]
+def _build_dpt_rod():
+    """重建 动探杆长/击数轴（维度校验后覆盖默认轴）"""
+    global DPT_ROD_L, DPT_ROD_N
+    # 动探 N63.5 杆长修正系数（GB50021-2001）
+    # 杆长 L 与击数 N 轴可由 TOML「公用.动探杆长修正_A类」覆盖（无配置回退硬编码）；
+    # 系数矩阵 α[N_idx][L_idx] 为 GB50021-2001 附录B 表B.0.1 固定值（TOML 不含矩阵），
+    # 覆盖 L/N 时须保持与矩阵维度一致（10×10），否则回退默认轴。
+    DPT_ROD_L = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+    DPT_ROD_N = [1, 5, 10, 15, 20, 25, 30, 35, 40, 50]
+    DPT_ROD_ALPHA = [
+        [1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00,1.00],
+        [1.00,0.96,0.93,0.90,0.88,0.85,0.82,0.79,0.77,0.75],
+        [1.00,0.95,0.90,0.86,0.83,0.79,0.76,0.73,0.70,0.67],
+        [1.00,0.93,0.88,0.83,0.79,0.75,0.71,0.67,0.63,0.59],
+        [1.00,0.92,0.85,0.80,0.75,0.70,0.66,0.62,0.57,0.53],
+        [1.00,0.90,0.83,0.77,0.72,0.67,0.62,0.57,0.53,0.48],
+        [1.00,0.89,0.81,0.75,0.69,0.64,0.58,0.54,0.49,0.44],
+        [1.00,0.87,0.79,0.73,0.67,0.61,0.56,0.51,0.46,0.41],
+        [1.00,0.86,0.78,0.71,0.64,0.59,0.53,0.48,0.43,0.39],
+        [1.00,0.84,0.75,0.67,0.61,0.55,0.50,0.45,0.40,0.36],
+    ]
 
-# 动探杆长/击数轴：TOML「公用.动探杆长修正_A类」覆盖（维度须与系数矩阵一致，否则回退）
-_tmp_dpt_a = _cfg_data.get('公用', {}).get('动探杆长修正_A类', {})
-if isinstance(_tmp_dpt_a, dict):
-    try:
-        _dpt_l = [float(x) for x in _tmp_dpt_a.get('杆长', [])]
-        _dpt_n = [float(x) for x in _tmp_dpt_a.get('击数', [])]
-        if len(_dpt_l) == len(DPT_ROD_ALPHA[0]) and len(_dpt_n) == len(DPT_ROD_ALPHA):
-            DPT_ROD_L, DPT_ROD_N = _dpt_l, _dpt_n
-            log_config_load('公用.动探杆长修正_A类', 'TOML',
-                            f'L{len(_dpt_l)}档/N{len(_dpt_n)}档')
-        else:
-            log_config_load('公用.动探杆长修正_A类', '默认', '维度与系数矩阵不匹配')
-    except (TypeError, ValueError):
-        log_config_load('公用.动探杆长修正_A类', '默认', 'TOML 解析失败')
-else:
-    log_config_load('公用.动探杆长修正_A类', '默认')
+    # 动探杆长/击数轴：TOML「公用.动探杆长修正_A类」覆盖（维度须与系数矩阵一致，否则回退）
+    _tmp_dpt_a = _cfg_data.get('公用', {}).get('动探杆长修正_A类', {})
+    if isinstance(_tmp_dpt_a, dict):
+        try:
+            _dpt_l = [float(x) for x in _tmp_dpt_a.get('杆长', [])]
+            _dpt_n = [float(x) for x in _tmp_dpt_a.get('击数', [])]
+            # P2-7：轴必须严格递增（乱序轴会使 dpt_rod_correction_a 的
+            # next(...)-1 定位错乱/StopIteration；同值轴制造零除数），否则回退默认
+            _l_ok = len(_dpt_l) == len(DPT_ROD_ALPHA[0]) and all(a < b for a, b in zip(_dpt_l, _dpt_l[1:]))
+            _n_ok = len(_dpt_n) == len(DPT_ROD_ALPHA) and all(a < b for a, b in zip(_dpt_n, _dpt_n[1:]))
+            if _l_ok and _n_ok:
+                DPT_ROD_L, DPT_ROD_N = _dpt_l, _dpt_n
+                log_config_load('公用.动探杆长修正_A类', 'TOML',
+                                f'L{len(_dpt_l)}档/N{len(_dpt_n)}档')
+            else:
+                log_config_load('公用.动探杆长修正_A类', '默认', '维度不匹配或轴非严格递增')
+        except (TypeError, ValueError):
+            log_config_load('公用.动探杆长修正_A类', '默认', 'TOML 解析失败')
+    else:
+        log_config_load('公用.动探杆长修正_A类', '默认')
 
+
+
+def reload_config():
+    """重新加载 TOML 并重建全部派生常量（参数中心保存配置后调用；幂等）
+
+    v42 只清 load_project_config 缓存，已构造的 RuleEngine 与 import 期固化的
+    派生常量（区间表/关键词表/杆长系数）仍使用旧值，导致保存后不生效。
+    本函数清缓存后重跑全部 _build_* 构建器；配合 review_api 保存路径调用。
+    """
+    global _PROJECT_CONFIG
+    _PROJECT_CONFIG = None
+    _CONFIG_LOAD_LOG['加载详情'] = []
+    _build_state_maps()
+    _build_lithology_sets()
+    _build_soft_soil()
+    _build_spt_rod()
+    _build_dpt_rod()
+
+
+# 首次加载：构建全部派生常量
+_build_state_maps()
+_build_lithology_sets()
+_build_soft_soil()
+_build_spt_rod()
+_build_dpt_rod()
 
 def dpt_rod_correction_a(rod_length: float, raw_n: float) -> float:
     """A类工程（GB50021-2001）动探 N63.5 杆长修正：双线性插值，返回修正系数 α
@@ -608,8 +731,10 @@ def dpt_rod_length_offset() -> float:
 # ---- 岩土分类已经在文件顶部 TOML 加载段定义 ----
 # ---- 工程配置唯一加载器 load_project_config 定义在文件顶部 TOML 加载段 ----
 
+# P3（dao）：补 TCSID/TCDZSD/TCDZCY——此前白名单缺这三列，update_stratum_field
+# 写湿度/地质时代/地质成因会抛"字段不允许"
 ALLOWED_FIELDS = {'TCZCBH', 'TCYCBH', 'TCCDSD', 'TCHD', 'TCYMC', 'TCMC',  # G1: TCMC=理正库岩土名称列变体
-                  'TCYS', 'TCKSX', 'TCMSD', 'TCFHCD', 'TCMS'}
+                  'TCYS', 'TCKSX', 'TCMSD', 'TCSID', 'TCDZSD', 'TCDZCY', 'TCFHCD', 'TCMS'}
 
 DTLX_MAP = {'1': '轻型', '2': '重型', '3': '超重型'}
 SWLX_MAP = {'0': '初见', '1': '稳定', '2': '混合', '3': '恢复'}
@@ -703,12 +828,16 @@ def _classify_sand_detail(r2_05, r05_025, r025_0075, r20_2, r0075=None):
     （合计 100），累计含量按占总质量比例判定；r0075 缺失时按 0 处理（分母取
     >0.075mm 粒组合计，与既有测试口径一致）。>2mm 含量≥50% 属碎石土，由调用方
     classify_soil 提前拦截，本函数只处理砂土细分（砾砂上界 50% 由调用方保证）。
+    P2-5：入参统一数值化（理正库可能以字符串返回，'30' + 10 会抛 TypeError）。
     """
-    gravel = r20_2 or 0
-    coarse = r2_05 or 0
-    medium = r05_025 or 0
-    fine = r025_0075 or 0
-    r0075 = r0075 if r0075 is not None else 0
+    def _f(v):
+        f = _coerce_spt_n(v)
+        return 0.0 if f is None else f
+    gravel = _f(r20_2)
+    coarse = _f(r2_05)
+    medium = _f(r05_025)
+    fine = _f(r025_0075)
+    r0075 = 0.0 if r0075 is None else _f(r0075)
     total = gravel + coarse + medium + fine + r0075
     if total <= 0:
         return '砂土'
@@ -725,8 +854,9 @@ def _classify_sand_detail(r2_05, r05_025, r025_0075, r20_2, r0075=None):
     over_0075 = 100.0 - r0075 if r0075 > 0 else (gravel + coarse + medium + fine)
     if over_0075 > 85:
         return '细砂'
-    # 粉砂：>0.075mm 累计 50%~85%
-    if 50 < over_0075 <= 85:  # 细砂须 >85%（严格），故 85% 恰属粉砂上限
+    # 粉砂：>0.075mm 累计 50%~85%（P3-7：修复前 `50 <` 把恰 50% 落入下方
+    # dominant 兜底，与 docstring"粉砂 50%~85%"不符；细砂须 >85% 故 85% 属粉砂上限）
+    if 50 <= over_0075 <= 85:
         return '粉砂'
     # 无任何档命中（如 >0.075mm<50% 且无 r0075 明细）：按主粒组兜底（保持既有行为）
     dominant = max((coarse, '粗砂'), (medium, '中砂'), (fine, '细砂'), key=lambda x: x[0])
@@ -788,9 +918,23 @@ def classify_soil(sand_pct, silt_pct, clay_pct, ip=None, wl=None, proj_type='B',
             if ip > 0: return '粉土'
         return ''
 
-    fine = (silt_pct or 0) + (clay_pct or 0)
-    gravel = 100 - (sand_pct or 0) - fine if sand_pct is not None else 0
-    coarse_total = (sand_pct or 0) + gravel
+    # P2-4/P2-5：百分比入参数值化 + 合法性校验——
+    # 修复前字符串入参（'30' or 0 保留字符串）会拼接/除零 TypeError；
+    # 三列合计>100 → gravel 为负值参与判定；全 0 数据被判"碎石土"（gravel=100）。
+    def _pct(v):
+        f = _coerce_spt_n(v)
+        return None if f is None else max(0.0, min(f, 100.0))  # 越界钳制到 [0,100]
+    sand_pct = _pct(sand_pct)
+    silt_pct = _pct(silt_pct)
+    clay_pct = _pct(clay_pct)
+    sand_v = sand_pct if sand_pct is not None else 0.0
+    fine = (silt_pct or 0.0) + (clay_pct or 0.0)
+    if fine <= 0 and sand_v <= 0:
+        return ''  # 全零/空颗分行：无有效数据，不再误判"碎石土"
+    gravel = 100.0 - sand_v - fine
+    if gravel < 0:
+        gravel = 0.0  # 三列合计>100 的异常数据：负值钳 0，不参与砾/碎石判定
+    coarse_total = sand_v + gravel
 
     # 细粒土为主（fine ≥ 50%）
     if fine >= 50:
@@ -841,13 +985,23 @@ def classify_soil(sand_pct, silt_pct, clay_pct, ip=None, wl=None, proj_type='B',
 
 
 def il_to_plasticity(il: float, proj_type: str) -> str:
-    """根据液性指数 IL 返回可塑性状态"""
+    """根据液性指数 IL 返回可塑性状态
+
+    P1-⑧：区间键存在空隙（如 TOML 只配 ≤0.25 与 0.5~1.0，IL=0.3 无命中）时
+    返回 None 由调用方跳过——修复前兜底伪造状态（'流塑'/'坚硬'）导致空隙内的
+    IL 被静默赋予错误状态；口径与 spt_to_density/spt_to_plasticity 的
+    "空隙 → None" 完全一致（v38 修复仅覆盖 N 系列，IL 路径未同步）。
+    None/非数值入参同样返回 None（P2-9，修复前抛 TypeError）。
+    """
+    il = _coerce_spt_n(il)
+    if il is None:
+        return None
     mp = IL_PLASTICITY_A if proj_type == 'A' else IL_PLASTICITY_B
     eps = IL_EPSILON
     for lo, hi, state in mp:
         if lo - eps < il <= hi + eps:
             return state
-    return '流塑' if il > 1 else '坚硬'
+    return None
 
 
 def spt_to_plasticity(n: float, proj_type: str = 'A', max_plasticity: str = None) -> str:
@@ -861,7 +1015,13 @@ def spt_to_plasticity(n: float, proj_type: str = 'A', max_plasticity: str = None
     最大塑性上限」）为【项目设定】——A 类最大塑性上限=硬塑（残积土等场景
     封顶，N 判出"坚硬"的黏土层按硬塑处理），非规范条款；B 类 4 档（无可塑）
     同样封顶硬塑（TOML 已标注"项目特色，勿改"），均勿按规范表"修正"回坚硬。
+    注意：本函数签名默认 max_plasticity=None 表示不封顶；规则引擎调用时显式
+    传入项目设定值（A/B 类默认"硬塑"）。P3-5：签名默认与文档描述修正说明。
+    None/非数值入参返回 None（P2-9）。
     """
+    n = _coerce_spt_n(n)
+    if n is None:
+        return None
     mp = SPT_PLASTICITY_A if proj_type == 'A' else SPT_PLASTICITY_B
     eps = IL_EPSILON
     for lo, hi, d in mp:
@@ -886,8 +1046,13 @@ def spt_to_weathering(n: float, proj_type: str = 'A') -> str:
     N 为未经杆长修正的实测击数）；正式条文 DBJ15-31-2016 第4.2.3条注1
     （花岗岩类：残积 N'<40 / 全风化 40≤N'<70 / 强风化 N'≥70，其他岩石按
     国标 30/50 分界）可通过 TOML「A类.标贯N_风化程度」切换，勿直接改代码。
+    P1-⑦：None/非数值入参返回 None（修复前 `n = n if n is not None else 0`
+    把缺数据强制转 0 → 必中首档 → 岩石层无标贯被判"残积土"，R-DEN-008 误报；
+    现与 spt_to_density 的 _coerce_spt_n 防御口径完全一致）。
     """
-    n = n if n is not None else 0
+    n = _coerce_spt_n(n)
+    if n is None:
+        return None
     eps = IL_EPSILON
     mp = SPT_WEATHERING_A if proj_type == 'A' else SPT_WEATHERING_B
     for lo, hi, d in mp:

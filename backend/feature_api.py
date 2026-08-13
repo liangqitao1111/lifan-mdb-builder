@@ -48,7 +48,9 @@ def _review_all(db_id, project_type, max_plasticity, use_std_stratum, include_te
     engine = RuleEngine(project_type, max_plasticity, use_std_stratum)
     bhs = da.get_all_boreholes()
     sa = da.get_all_strata(); sp = da.get_all_spt()
-    dp = da.get_all_dpt(); tt = da.get_all_test() if include_test else {}
+    # P1-⑩：显式传 project_type（模块级 set_project_type 全局态会串口径）
+    dp = da.get_all_dpt(project_type)
+    tt = da.get_all_test() if include_test else {}
     out = {}
     for b in bhs:
         zk = str(b.get("zkbh") or "").strip()
@@ -85,15 +87,35 @@ def spt_apply(db_id: str, payload: dict):
     try:
         for it in items:
             if it.issue_type == "plasticity" and it.expected_state:
-                # 可塑性状态修正：定位包含该标贯深度的地层（TCCDSD ≥ bgdsd 的最小层底），写回 TCKSX
-                cur = conn.execute(
-                    "UPDATE [z_g_TuCeng] SET TCKSX = ? WHERE ZKBH = ? AND TCCDSD = "
-                    "(SELECT MIN(TCCDSD) FROM [z_g_TuCeng] WHERE ZKBH = ? AND TCCDSD >= ?)",
-                    (it.expected_state, it.zkbh, it.zkbh, float(it.bgdsd)))
-                s_updated += cur.rowcount
+                # P1-⑥ 可塑性状态修正：地层定位必须与规则引擎层位判定口径一致——
+                # 引擎按 (层顶, 层底] 归属（prev_depth < bgdsd <= depth），此前 SQL
+                # 只取 MIN(TCCDSD >= bgdsd)，深度恰等于层界时归错层（引擎归下层、
+                # SQL 归上层）。现按层顶/层底区间逐层匹配，找不到（跨层空隙）则跳过。
+                rows = conn.execute(
+                    "SELECT id, TCCDSD FROM [z_g_TuCeng] WHERE ZKBH = ? ORDER BY TCCDSD",
+                    (it.zkbh,)).fetchall()
+                target_id = None
+                prev_depth = 0.0
+                d = float(it.bgdsd)
+                for rid, depth in rows:
+                    depth = float(depth or 0)
+                    if prev_depth < d <= depth:
+                        target_id = rid
+                        break
+                    prev_depth = depth
+                if target_id is not None:
+                    cur = conn.execute(
+                        "UPDATE [z_g_TuCeng] SET TCKSX = ? WHERE id = ?",
+                        (it.expected_state, target_id))
+                    s_updated += cur.rowcount
+                else:
+                    # 深度不在任何层区间（跨层/超深）：跳过，不静默写错层
+                    continue
             else:
+                # P2-5 浮点容差：BGDSD 为 REAL 存储，前端传 3 位小数，
+                # 精确等值可能 miss（如 5.1000000000000005 vs 5.1）
                 cur = conn.execute(
-                    "UPDATE [z_y_BiaoGuan] SET BGJS = ? WHERE ZKBH = ? AND BGDSD = ?",
+                    "UPDATE [z_y_BiaoGuan] SET BGJS = ? WHERE ZKBH = ? AND ABS(BGDSD - ?) < 0.005",
                     (float(it.new_n), it.zkbh, float(it.bgdsd)))
                 n_updated += cur.rowcount
             updated += cur.rowcount
@@ -115,6 +137,7 @@ def dpt_correct(db_id: str, payload: DptCorrectPayload):
     project_type = payload.project_type
     """按 GB50021 杆长修正公式，对钻孔重型动探计算并写回修正值 DTXZJS"""
     from review.config import dpt_rod_correction_a, dpt_rod_length_offset
+    from review.dao import _is_heavy_dpt  # P2-5：与规则引擎 R-DEN-002 共用同一重型判定
     import sqlite3
     path = _db_path(db_id)
     conn = sqlite3.connect(path)
@@ -124,9 +147,9 @@ def dpt_correct(db_id: str, payload: DptCorrectPayload):
             "SELECT ZKBH, DTDSD, DTLX, DTJS, DTXZJS FROM [z_y_DongTan] WHERE ZKBH = ? ORDER BY DTDSD",
             (zkbh,)).fetchall()
         for r in rows:
-            dtlx = str(r[2] or "")
-            if dtlx not in ("2", "重型", ""):
-                continue  # 仅重型（GB50021 表B.0.1）
+            dtlx_raw = str(r[2]).strip() if r[2] else ''
+            if not _is_heavy_dpt(dtlx_raw):
+                continue  # 仅重型（GB50021 表B.0.1；轻型/超重型跳过）
             try:
                 dtjs = float(r[3] or 0)
                 dtdsd = float(r[1] or 0)
@@ -137,7 +160,12 @@ def dpt_correct(db_id: str, payload: DptCorrectPayload):
             alpha = dpt_rod_correction_a(dtdsd + dpt_rod_length_offset(), dtjs)
             new_val = round(dtjs * alpha, 2)
             old_val = r[4]
-            if str(old_val or "") != str(new_val):
+            # P2-5：数值容差比较（修复前 str 比较对 0.0/0 等表示差异会重复写库）
+            try:
+                old_f = float(old_val) if old_val is not None else None
+            except (TypeError, ValueError):
+                old_f = None
+            if old_f is None or abs(old_f - new_val) > 0.005:
                 conn.execute("UPDATE [z_y_DongTan] SET DTXZJS = ? WHERE ZKBH = ? AND DTDSD = ?",
                              (new_val, zkbh, dtdsd))
                 updated += 1

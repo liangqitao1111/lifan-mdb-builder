@@ -550,38 +550,8 @@ a:hover { text-decoration: underline; }
 <div class="toast" id="toast"></div>
 
 <script>
-const DB_NAME = 'lifan_web_db';
-const DB_VERSION = 1;
-const TABLES = ['zk_boreholes','dz_strata','dt_dynamic','sj_lab','rb_daily','users','backups','audit_logs','config'];
-
-let db = null;
-function openDB(){
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = e => {
-      const d = e.target.result;
-      TABLES.forEach(t => {
-        if (!d.objectStoreNames.contains(t)) {
-          if (t === 'zk_boreholes') d.createObjectStore(t, { keyPath: 'id', autoIncrement: true }).createIndex('borehole_no','borehole_no',{unique:false});
-          else if (t === 'users') d.createObjectStore(t, { keyPath: 'id', autoIncrement: true }).createIndex('username','username',{unique:true});
-          else d.createObjectStore(t, { keyPath: 'id', autoIncrement: true });
-        }
-      });
-    };
-    req.onsuccess = e => { db = e.target.result; resolve(db); };
-    req.onerror = e => reject(e);
-  });
-}
-function dao(store, mode){ return db.transaction(store, mode).objectStore(store); }
-async function dbAll(store){ return new Promise(r => { const q = dao(store,'readonly').getAll(); q.onsuccess = () => r(q.result || []); }); }
-async function dbGet(store, key){ return new Promise(r => { const q = dao(store,'readonly').get(key); q.onsuccess = () => r(q.result); }); }
-async function dbPut(store, row){ return new Promise(r => { row.updated_at = new Date().toISOString(); const q = dao(store,'readwrite').put(row); q.onsuccess = () => r(q.result); }); }
-async function dbDel(store, key){ return new Promise(r => { const q = dao(store,'readwrite').delete(key); q.onsuccess = () => r(); }); }
-
-async function sha256(s){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s + '_lifan_salt'));
-  return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
-}
+// P2-2：IndexedDB 本地存储层已删除（v31+ 起全站走 FastAPI 后端，openDB/seed/
+// sha256/dbAll 等为旧架构遗留死代码；登录鉴权与数据均在后端）
 
 function toggleTheme(){
   const root = document.documentElement;
@@ -673,6 +643,8 @@ async function apiFetch(path, options = {}){
   } finally { clearTimeout(timer); }
   if (res.status === 401) {
     setToken('');
+    try { localStorage.removeItem('lifan_session'); } catch (e) {  }
+    session = null;
     showToast('登录已过期，请重新登录', 'err');
     const lp = document.getElementById('loginPage');
     if (lp) { lp.style.display = 'flex'; }
@@ -743,36 +715,13 @@ function fmtSize(n){
 function ts(){ return new Date().toTimeString().slice(0, 8); }
 function escHtml(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escAttr(s){ return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function escJs(s){ return escAttr(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }  // P2-1：onclick 单引号字符串注入防护
 function qsName(form, name){ return form.querySelector('[name="' + String(name).replace(/"/g, '\\"') + '"]'); }
 
-async function seed(){
-  const users = await dbAll('users');
-  if (users.length === 0) {
-    await dbPut('users', {username:'admin',   display_name:'管理员 · Geo-Le', email:'geo-le@lifan.com', role:'admin',  password_hash: await sha256('admin'),  status:'active', last_login: new Date().toISOString()});
-    await dbPut('users', {username:'editor',  display_name:'张工',           email:'zhang@lifan.com',  role:'editor', password_hash: await sha256('editor'), status:'active'});
-    await dbPut('users', {username:'viewer',  display_name:'访客',           email:'viewer@lifan.com', role:'viewer', password_hash: await sha256('viewer'), status:'active'});
-  }
-  const zk = await dbAll('zk_boreholes');
-  if (zk.length === 0) {
-    const samples = [
-      {borehole_no:'ZK01-01', layer_no:1, bottom_depth:5.0,  layer_thick:5.0, rock_name:'素填土',     status:'confirmed'},
-      {borehole_no:'ZK01-01', layer_no:2, bottom_depth:8.5,  layer_thick:3.5, rock_name:'粉质黏土',   status:'confirmed'},
-      {borehole_no:'ZK01-01', layer_no:3, bottom_depth:12.0, layer_thick:3.5, rock_name:'全风化泥岩', status:'pending'},
-      {borehole_no:'ZK01-02', layer_no:1, bottom_depth:4.0,  layer_thick:4.0, rock_name:'杂填土',     status:'confirmed'},
-      {borehole_no:'ZK01-02', layer_no:2, bottom_depth:9.5,  layer_thick:5.5, rock_name:'中砂',       status:'pending'},
-      {borehole_no:'ZK01-03', layer_no:1, bottom_depth:3.0,  layer_thick:3.0, rock_name:'素填土',     status:'confirmed'},
-    ];
-    for (const r of samples) await dbPut('zk_boreholes', r);
-  }
-}
-
 let session = null;
-const PERMISSIONS = {
-  admin:  {data_query:true, data_edit:true, data_delete:true, db_export:true, backup:true, user_manage:true},
-  editor: {data_query:true, data_edit:true, data_delete:true, db_export:true, backup:true, user_manage:false},
-  viewer: {data_query:true, data_edit:false, data_delete:false, db_export:false, backup:false, user_manage:false},
-};
-function can(perm){ return session && PERMISSIONS[session.role] && PERMISSIONS[session.role][perm]; }
+// P2-2：角色权限表删除——Web 端登录后恒为管理员（后端仅 admin 账号），
+// can() 保留为恒真兼容既有调用点（inlineEdit/cyChange/delOnlineRow）
+function can(perm){ return true; }
 
 function showToast(msg, type='ok'){
   const t = document.getElementById('toast');
@@ -859,10 +808,20 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await dbPut('audit_logs', {user_id:session.id, action:'logout', detail:`退出`, created_at:new Date().toISOString()});
+  // P1-⑨ 登出：调用后端 /api/logout 真实吊销 token + 清除本地 token/session
+  //（此前只写 IndexedDB 审计，token 12h 内仍有效且留在 localStorage，登出形同虚设）
+  try {
+    const t = getToken();
+    if (t) {
+      await fetch('/api/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + t } }).catch(() => {});
+    }
+  } catch (e) {  }
+  setToken('');
   session = null;
+  try { localStorage.removeItem('lifan_session'); } catch (e) {  }
   document.getElementById('app').classList.remove('show');
   document.getElementById('loginPage').style.display = 'flex';
+  showToast('已退出登录', 'info');
 });
 
 const ROUTES = ['workspace','tools','build','config'];
@@ -1149,7 +1108,6 @@ async function renderWorkspace(){
 
 async function wsUpload(file){
   if (!file) return;
-  pendingMdbFile = file;
   const st = document.getElementById('wsUploadStatus');
   st.textContent = '上传解析中…'; st.style.color = 'var(--steel)';
   try {
@@ -1238,7 +1196,7 @@ function wsHoleItem(zk, info){
                (info.m ? '<span class="ws-badge m">M·' + info.m + '</span>' : '');
   const tip = '高风险 ' + (info.h || 0) + ' · 中风险 ' + (info.m || 0) + ' · 点击查看详情';
   const riskCls = info.h ? ' risk-h' : (info.m ? ' risk-m' : '');
-  return '<div class="ws-hole' + (zk === WS.zkbh ? ' active' : '') + riskCls + '" data-zk="' + escAttr(zk) + '" onclick="wsSelectHole(\'' + escAttr(zk) + '\')" title="' + escAttr(tip) + '">' +
+  return '<div class="ws-hole' + (zk === WS.zkbh ? ' active' : '') + riskCls + '" data-zk="' + escAttr(zk) + '" onclick="wsSelectHole(\'' + escJs(zk) + '\')" title="' + escAttr(tip) + '">' +
          '<span>' + escHtml(zk) + '</span><span>' + tags + '</span></div>';
 }
 
@@ -1906,7 +1864,6 @@ async function runStats(kind){
   } catch (e) { showToast('生成失败：' + (e && e.message || e), 'err'); }
 }
 
-let pendingMdbFile = null;
 const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null, orderBy: '', orderDir: '', activeRow: -1, freeze: false };
 
 async function loadOnlinePage(page){
@@ -2047,8 +2004,8 @@ function renderOnlineRows(rows){
       const cn = escHtml(COLUMN_CN[c] || c);
       const ind = sorted ? '<span style="font-size:10px;margin-left:2px;">' + (OData.orderDir === 'desc' ? '↓' : '↑') + '</span>' : '<span class="col-act" style="font-size:10px;margin-left:2px;">⇅</span>';
       return '<div class="' + (OData.freeze && ci === 0 ? 'cell-fixed' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:5px;' + (OData.freeze && ci === 0 ? 'left:80px;' : '') + '">' +
-        '<span class="col-sort' + (sorted ? ' sorted' : '') + '" style="flex:1;min-width:0;" title="' + (sorted ? '点击切换排序方向' : '点击排序') + '" onclick="sortBy(\'' + c + '\')"><span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">' + cn + '</span>' + ind + '</span>' +
-        '<span class="col-act" style="cursor:pointer;font-size:12px;" title="按此列筛选" onclick="filterBy(\'' + c + '\')">⌕</span>' +
+        '<span class="col-sort' + (sorted ? ' sorted' : '') + '" style="flex:1;min-width:0;" title="' + (sorted ? '点击切换排序方向' : '点击排序') + '" onclick="sortBy(\'' + escJs(c) + '\')"><span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">' + cn + '</span>' + ind + '</span>' +
+        '<span class="col-act" style="cursor:pointer;font-size:12px;" title="按此列筛选" onclick="filterBy(\'' + escJs(c) + '\')">⌕</span>' +
       '</div>';
     }).join('') +
     '<div>操作</div></div>';
@@ -2075,11 +2032,11 @@ function renderOnlineRows(rows){
         }
         if (c === 'TCXH' && isStrata) {
           const lno = layerNoOf(row);
-          return '<div class="' + cls.trim() + '" style="' + stl + '" title="主层号-亚层号 · 点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + escHtml(lno == null ? '—' : lno) + '</div>';
+          return '<div class="' + cls.trim() + '" style="' + stl + '" title="主层号-亚层号 · 点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + escJs(c) + '\')">' + escHtml(lno == null ? '—' : lno) + '</div>';
         }
         const val = row[c] === null || row[c] === undefined || row[c] === '' ? '<span class="muted">—</span>' : escHtml(fmtNum(row[c]));
         const tip = WS_COL_WIDE.includes(c) ? escAttr(row[c] == null ? '' : String(row[c])) + ' · 点击编辑' : '点击编辑';
-        return '<div class="' + cls.trim() + '" style="' + stl + '" title="' + tip + '" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + val + '</div>';
+        return '<div class="' + cls.trim() + '" style="' + stl + '" title="' + tip + '" onclick="inlineEdit(this, ' + idJs + ', \'' + escJs(c) + '\')">' + val + '</div>';
       }).join('') +
       '<div>' +
         (can('data_delete') ? '<a class="btn-link" style="color:var(--error)" href="javascript:delOnlineRow(' + idJs + ')">删除</a>' : '') +
@@ -2104,8 +2061,8 @@ function filterBy(c){
     '<p style="margin:0 0 12px;font-size:12px;color:var(--muted);">模糊匹配该列，可与排序叠加；不输入直接应用则清除该列筛选。</p>' +
     '<input id="filterInput" placeholder="输入关键词…" value="' + escAttr(cur) + '" style="width:100%;height:38px;border:1px solid var(--hairline-strong);border-radius:10px;padding:0 12px;font-size:13px;box-sizing:border-box;">' +
     '<div style="display:flex;gap:10px;margin-top:14px;">' +
-      '<button class="btn btn-primary" onclick="filterApply(\'' + c + '\', true)">应用</button>' +
-      '<button class="btn btn-secondary" onclick="filterApply(\'' + c + '\', false)">清除该列</button>' +
+      '<button class="btn btn-primary" onclick="filterApply(\'' + escJs(c) + '\', true)">应用</button>' +
+      '<button class="btn btn-secondary" onclick="filterApply(\'' + escJs(c) + '\', false)">清除该列</button>' +
       '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
     '</div></div>';
   openModal('列筛选 · ' + (COLUMN_CN[c] || c), html);
@@ -2151,33 +2108,6 @@ function paintActiveRow(){
   grid.querySelectorAll('.t-row').forEach((r, i) => r.classList.toggle('cell-active', i === OData.activeRow));
 }
 
-function openOnlineEditById(id){
-  openOnlineEdit(OData.rowCache ? OData.rowCache[String(id)] : null);
-}
-function openOnlineEdit(row){
-  if (!can('data_edit')) return showToast('当前角色无编辑权限', 'err');
-  const cols = (OData.columns || []).filter(c => c !== 'id');
-  const form = document.getElementById('modalForm');
-  document.getElementById('modalTitle').textContent = row ? '编辑数据 · ' + OData.table : '新增数据 · ' + OData.table;
-  form.innerHTML = cols.map(c =>
-    '<div class="form-row"><label>' + escHtml(c) + '</label><input name="' + escAttr(c) + '" value="' + (row ? escAttr(row[c] ?? '') : '') + '" style="height:38px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);padding:0 10px;"></div>'
-  ).join('') + '<p class="muted small" style="margin-top:4px;">注：id 为服务端主键，不可编辑；保存后立即写回在线工作库。</p>';
-  document.getElementById('modalMask').classList.add('show');
-  document.getElementById('modalOk').onclick = async () => {
-    const data = {};
-    cols.forEach(c => { const el = qsName(form, c); data[c] = el ? el.value : ''; });
-    try {
-      if (row) {
-        await apiPut('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table)) + '/' + encodeURIComponent(row.id), { data });
-      } else {
-        await apiPost('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table)), { data });
-      }
-      document.getElementById('modalMask').classList.remove('show');
-      showToast(row ? '已保存' : '已新增');
-      loadOnlinePage(row ? OData.page : 1);
-    } catch (e) {}
-  };
-}
 async function delOnlineRow(id){
   if (!can('data_delete')) return showToast('当前角色无删除权限', 'err');
   if (!confirm('确认删除该条数据？删除后不可恢复。')) return;
@@ -2334,8 +2264,6 @@ async function downloadApiFile(path, filename){
 }
 
 async function main(){
-  await openDB();
-  await seed();
   loadApiState();
   detectBackend();
   document.getElementById('loginUser').value = 'admin';

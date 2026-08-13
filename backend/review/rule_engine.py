@@ -24,21 +24,44 @@ _STD_COL_TCFHCD = 11   # 风化程度
 _STD_COL_STATE = 13    # 原始状态描述
 
 
-# ---- 从 TOML 读取关键词 ----
-_kw_cfg = load_project_config().get('规则_关键词', {})
-_COLOR_WORDS_LIST = _kw_cfg.get('颜色词',
-    ['灰','黄','红','褐','棕','黑','白','绿','紫','青','蓝','橙',
-     '粉红','暗红','肉红','砖红','紫红','黄褐','灰白','灰黄','灰绿',
-     '灰褐','深灰','浅灰','棕黄','棕红','深褐',
-     '黄绿','灰黑','青灰','乳白','淡黄','深黄','浅黄','暗绿','墨绿',
-     '杂色','花色'])
-_COLOR_WORDS = re.compile(f'({chr(124).join(_COLOR_WORDS_LIST)})')
-_DESC_DENSITY_WORDS = _kw_cfg.get('密实度词',
-    ['密实度','密实','中密','稍密','松散','稍密状','中密状','密实状','松散状'])
-_DESC_DENSITY = re.compile(f'({chr(124).join(_DESC_DENSITY_WORDS)})')
-_DESC_MOISTURE_WORDS = _kw_cfg.get('湿度词',
-    ['湿度','稍湿','很湿','饱和','干燥','潮湿'])
-_DESC_MOISTURE = re.compile(f'({chr(124).join(_DESC_MOISTURE_WORDS)})')
+# ---- 从 TOML 读取关键词（P1-⑤：可经 reload_from_config 重建，参数中心保存后生效）----
+_COLOR_WORDS = re.compile('(?:)')   # 占位，_build_keywords() 重建
+_DESC_DENSITY = re.compile('(?:)')
+_DESC_MOISTURE = re.compile('(?:)')
+_COLOR_EXCLUDE_WORDS = []
+_GENERIC_EXCLUDE_WORDS = []
+
+
+def _build_keywords():
+    """重建模块级关键词词表（import 时与配置保存后各调用一次）"""
+    global _COLOR_WORDS, _DESC_DENSITY, _DESC_MOISTURE
+    global _COLOR_EXCLUDE_WORDS, _GENERIC_EXCLUDE_WORDS
+    _kw_cfg = load_project_config().get('规则_关键词', {})
+    _color_words_list = _kw_cfg.get('颜色词',
+        ['灰','黄','红','褐','棕','黑','白','绿','紫','青','蓝','橙',
+         '粉红','暗红','肉红','砖红','紫红','黄褐','灰白','灰黄','灰绿',
+         '灰褐','深灰','浅灰','棕黄','棕红','深褐',
+         '黄绿','灰黑','青灰','乳白','淡黄','深黄','浅黄','暗绿','墨绿',
+         '杂色','花色'])
+    _COLOR_WORDS = re.compile(f'({chr(124).join(_color_words_list)})')
+    _desc_density_words = _kw_cfg.get('密实度词',
+        ['密实度','密实','中密','稍密','松散','稍密状','中密状','密实状','松散状'])
+    _DESC_DENSITY = re.compile(f'({chr(124).join(_desc_density_words)})')
+    _desc_moisture_words = _kw_cfg.get('湿度词',
+        ['湿度','稍湿','很湿','饱和','干燥','潮湿'])
+    _DESC_MOISTURE = re.compile(f'({chr(124).join(_desc_moisture_words)})')
+    _COLOR_EXCLUDE_WORDS = _kw_cfg.get('颜色排除词',
+        ['灰岩', '灰质', '石灰', '泥灰'])
+    _GENERIC_EXCLUDE_WORDS = _kw_cfg.get('排除词',
+        ['未做试验', '未做', '未测定', '未测', '无', '不', '未'])
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生的关键词常量（review_api._reload_config_modules 调用）"""
+    _build_keywords()
+
+
+_build_keywords()
 
 # ---- V2.2.2（C8）关键词排除词（最小化修复，保留模糊包含容错特色）----
 # 模糊包含匹配是项目容错特色（"灰岩质黏土"含"灰"、描述含"密实度"三字即放行）；
@@ -51,10 +74,6 @@ _DESC_MOISTURE = re.compile(f'({chr(124).join(_DESC_MOISTURE_WORDS)})')
 # 直接相邻才生效；单字否定词（无/不/未）仅当关键词为字段概念词（密实度/湿度）、
 # 或否定词为"不"（"不密实"直接否定状态）、或"未见X"前置（"未见密实度"）时生效。
 # "中密未见地下水"中"未"修饰的是地下水而非密实度，不再触发否定。
-_COLOR_EXCLUDE_WORDS = _kw_cfg.get('颜色排除词',
-    ['灰岩', '灰质', '石灰', '泥灰'])
-_GENERIC_EXCLUDE_WORDS = _kw_cfg.get('排除词',
-    ['未做试验', '未做', '未测定', '未测', '无', '不', '未'])
 # 字段概念词：否定词修饰的是"字段本身"（"密实度未见记录/未见密实度"= 无密实度资料）；
 # 状态词（中密/稍密/密实/松散/稍湿/饱和 等）被"未/无"邻接多为误伤
 # （"中密未见地下水"= 中密 + 未见地下水，密实度信息仍成立）。
@@ -433,13 +452,17 @@ class RuleEngine:
         if not desc:
             return
 
+        prev_depth = ctx.get('prev_depth', 0)
+        layer_bottom = l['tccdsd']
+        # P2（dao）：层底深度为 0（源库该字段为 NULL，dao 转 0）时范围 [0,0] 会让
+        # 描述里任何深度数字都误报 R-CHK-003——无有效深度范围，跳过该层检查
+        if layer_bottom <= 0:
+            return
+
         # 提取所有"数字+m/米"或"数字~数字+m/米"的深度值
         # 使用 finditer 获取位置，过滤掉 cm/mm 的误匹配
         raw_pattern = r'(\d+\.?\d*)\s*~\s*(\d+\.?\d*)\s*[m米]|(\d+\.?\d*)\s*[m米]'
         out_of_range = []
-
-        prev_depth = ctx.get('prev_depth', 0)
-        layer_bottom = l['tccdsd']
 
         for m in re.finditer(raw_pattern, desc):
             full_match = m.group()

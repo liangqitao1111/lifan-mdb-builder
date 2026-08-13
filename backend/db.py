@@ -249,6 +249,9 @@ def upsert_row(db_path, table, data, row_id=None):
         if row_id is not None and id_col:
             sets = ", ".join(f'"{k}" = ?' for k in data)
             conn.execute(f'UPDATE "{table}" SET {sets} WHERE "{id_col}" = ?', list(data.values()) + [row_id])
+        elif row_id is not None and not id_col:
+            # P2-4：修复前无 id 列时静默走 INSERT 分支（更新变新增，数据翻倍）
+            raise ValueError(f"表 {table} 无 id 列，无法按主键更新（row_id={row_id}）")
         else:
             keys = list(data.keys())
             placeholders = ", ".join("?" for _ in keys)

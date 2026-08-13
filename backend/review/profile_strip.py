@@ -14,19 +14,31 @@ STYLE = '地质'
 MAX_DEPTH = 15
 
 # 地层颜色（从 TOML 读取，兼容无配置文件的回退）
-_color_cfg = load_project_config().get('DXF_剖面颜色', {})
-FORM_COLORS = {
-    '填土': _color_cfg.get('填土', 251),
-    '黏性土': _color_cfg.get('黏性土', 50),
-    '粉土': _color_cfg.get('粉土', 130),
-    '砂土': _color_cfg.get('砂土', 30),
-    '碎石土': _color_cfg.get('碎石土', 170),
-    '软土': _color_cfg.get('软土', 120),
-    '灰岩': _color_cfg.get('灰岩', 140),
-    '花岗岩': _color_cfg.get('花岗岩', 140),
-    '砂岩': _color_cfg.get('砂岩', 160),
-    '基岩': _color_cfg.get('基岩', 140),
-}
+def _build_config():
+    """重建 剖面颜色映射（import 时与配置保存后各调用一次）"""
+    global _color_cfg, FORM_COLORS
+
+    _color_cfg = load_project_config().get('DXF_剖面颜色', {})
+    FORM_COLORS = {
+        '填土': _color_cfg.get('填土', 251),
+        '黏性土': _color_cfg.get('黏性土', 50),
+        '粉土': _color_cfg.get('粉土', 130),
+        '砂土': _color_cfg.get('砂土', 30),
+        '碎石土': _color_cfg.get('碎石土', 170),
+        '软土': _color_cfg.get('软土', 120),
+        '灰岩': _color_cfg.get('灰岩', 140),
+        '花岗岩': _color_cfg.get('花岗岩', 140),
+        '砂岩': _color_cfg.get('砂岩', 160),
+        '基岩': _color_cfg.get('基岩', 140),
+    }
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
 
 
 def _text(msp, text, pos, height=1.2, halign=TextEntityAlignment.LEFT):

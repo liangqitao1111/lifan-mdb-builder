@@ -15,14 +15,27 @@ import ezdxf
 
 # ---------- 配置常量（从 TOML 读取，兼容无配置文件的回退） ----------
 from config import load_project_config, CAVITY_TYPES
-_pf_cfg = load_project_config().get('DXF_纵断面', {})
-OFFSET = float(_pf_cfg.get('贴块偏移', 10.0))
-CAVE_WING = float(_pf_cfg.get('溶洞翼展', 16.0))
-CAVE_GAP = float(_pf_cfg.get('溶洞间隙', 1.0))
-TEXT_OFFSET = float(_pf_cfg.get('文字偏移', 15.0))
-TEXT_HEIGHT = float(_pf_cfg.get('文字高度', 1.5))
-N_SEG = int(_pf_cfg.get('溶洞分段数', 7))
-CAVE_LTYPE = str(_pf_cfg.get('溶洞线型名', '岩溶空洞'))
+def _build_config():
+    """重建 纵断面 DXF 参数（import 时与配置保存后各调用一次）"""
+    global _pf_cfg, OFFSET, CAVE_WING, CAVE_GAP, TEXT_OFFSET, TEXT_HEIGHT, N_SEG, CAVE_LTYPE
+
+    _pf_cfg = load_project_config().get('DXF_纵断面', {})
+    OFFSET = float(_pf_cfg.get('贴块偏移', 10.0))
+    CAVE_WING = float(_pf_cfg.get('溶洞翼展', 16.0))
+    CAVE_GAP = float(_pf_cfg.get('溶洞间隙', 1.0))
+    TEXT_OFFSET = float(_pf_cfg.get('文字偏移', 15.0))
+    TEXT_HEIGHT = float(_pf_cfg.get('文字高度', 1.5))
+    N_SEG = int(_pf_cfg.get('溶洞分段数', 7))
+    CAVE_LTYPE = str(_pf_cfg.get('溶洞线型名', '岩溶空洞'))
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
+
 
 
 def _load_valid_blocks(block_template):

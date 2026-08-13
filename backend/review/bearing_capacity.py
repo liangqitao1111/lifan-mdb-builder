@@ -13,12 +13,25 @@ from config import load_project_config
 
 _log = get_logger()
 
-# ---- 承载力计算配置（从 TOML 加载） ----
-_bc_cfg = load_project_config().get('承载力计算', {})
-# 黄土液限分段阈值：新黄土 WL 分段查表用
-_loess_wl_thresholds = _bc_cfg.get('黄土液限分段', [28, 32])
-# 老黄土 e 分段阈值：老黄土 e 分段查表用
-_loess_old_e_thresholds = _bc_cfg.get('老黄土e分段', [0.7, 0.8, 0.9])
+def _build_config():
+    """重建 承载力计算黄土分段阈值（import 时与配置保存后各调用一次）"""
+    global _bc_cfg, _loess_wl_thresholds, _loess_old_e_thresholds
+
+    # ---- 承载力计算配置（从 TOML 加载） ----
+    _bc_cfg = load_project_config().get('承载力计算', {})
+    # 黄土液限分段阈值：新黄土 WL 分段查表用
+    _loess_wl_thresholds = _bc_cfg.get('黄土液限分段', [28, 32])
+    # 老黄土 e 分段阈值：老黄土 e 分段查表用
+    _loess_old_e_thresholds = _bc_cfg.get('老黄土e分段', [0.7, 0.8, 0.9])
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
+
 
 
 # ============================================================

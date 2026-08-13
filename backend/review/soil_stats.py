@@ -74,72 +74,87 @@ LEGACY_REASONABLE_RANGES = {
 }
 
 # =============================================================================
-# 新规则：从 TOML 加载，TOML 不存在则回归旧规则
-# =============================================================================
-_cfg = load_project_config()
+def _build_config():
+    """重建 土工统计指标配置（INDICATORS/分组/域规则/统计参数）（import 时与配置保存后各调用一次）"""
+    global _cfg, _std_cfg, _ti, _tg, _tdr, _cfg_stats, STANDARD_VALUE_DIRECTION
+    global INDICATORS, INDICATOR_GROUPS, DOMAIN_RULES, REASONABLE_RANGES
+    global CV_THRESHOLD, MAX_ITER, OUTLIER_SIGMA, MIN_STD_SAMPLE
 
-# 0. 标准值方向开关（TOML「试验指标_统计.标准值方向」）
-#    "模板"（默认）：与 铁三物理力学表公式.xlsx 一致，全部指标取 1−ψ
-#    "规范"：GB50021 附录E 方向口径（low_good 取 1+ψ，high_good 取 1−ψ）
-_std_cfg = _cfg.get('试验指标_统计', {})
-STANDARD_VALUE_DIRECTION = str(_std_cfg.get('标准值方向', '模板') or '模板')
+    # 新规则：从 TOML 加载，TOML 不存在则回归旧规则
+    # =============================================================================
+    _cfg = load_project_config()
 
-# 1. INDICATORS
-_ti = _cfg.get('试验指标', {})
-if _ti:
-    INDICATORS = {k: (v['名称'], v['方向']) for k, v in _ti.items() if v.get('名称')}
-else:
-    INDICATORS = dict(LEGACY_INDICATORS)
+    # 0. 标准值方向开关（TOML「试验指标_统计.标准值方向」）
+    #    "模板"（默认）：与 铁三物理力学表公式.xlsx 一致，全部指标取 1−ψ
+    #    "规范"：GB50021 附录E 方向口径（low_good 取 1+ψ，high_good 取 1−ψ）
+    _std_cfg = _cfg.get('试验指标_统计', {})
+    STANDARD_VALUE_DIRECTION = str(_std_cfg.get('标准值方向', '模板') or '模板')
 
-# 2. INDICATOR_GROUPS：每组第一个 key 为领头指标
-_tg = _cfg.get('试验指标_分组', {})
-if _tg:
-    INDICATOR_GROUPS = [(v, v[0]) for v in _tg.values()]
-else:
-    INDICATOR_GROUPS = list(LEGACY_INDICATOR_GROUPS)
+    # 1. INDICATORS
+    _ti = _cfg.get('试验指标', {})
+    if _ti:
+        INDICATORS = {k: (v['名称'], v['方向']) for k, v in _ti.items() if v.get('名称')}
+    else:
+        INDICATORS = dict(LEGACY_INDICATORS)
 
-# 3. DOMAIN_RULES（从 TOML 解析 "<1.0" 格式的判断条件）
-# V2.2.4（H4）：统一走 config.parse_domain_condition 严格语义解析——
-# '>=1.0'/'<=1.0' 前缀必须先于 '>'/'<' 判定（原顺序使 float('=1.0') 抛
-# ValueError，模块导入期即崩溃）；解析失败的行跳过（防御式）。
-_DOMAIN_OP_LAMBDA = {
-    '<':  lambda v, t: v < t,
-    '>':  lambda v, t: v > t,
-    '>=': lambda v, t: v >= t,
-    '<=': lambda v, t: v <= t,
-}
-_tdr = _cfg.get('试验指标_域规则', [])
-if _tdr:
-    DOMAIN_RULES = []
-    for r in _tdr:
-        name = r.get('岩土', '')
-        key = r.get('指标', '')
-        cond = r.get('判断', '')
-        if name and key and cond:
-            parsed = parse_domain_condition(cond)
-            if parsed is not None:
-                op, th = parsed
-                DOMAIN_RULES.append((name, key, lambda v, t=th, o=op: _DOMAIN_OP_LAMBDA[o](v, t)))
-else:
-    DOMAIN_RULES = list(LEGACY_DOMAIN_RULES)
+    # 2. INDICATOR_GROUPS：每组第一个 key 为领头指标
+    _tg = _cfg.get('试验指标_分组', {})
+    if _tg:
+        INDICATOR_GROUPS = [(v, v[0]) for v in _tg.values()]
+    else:
+        INDICATOR_GROUPS = list(LEGACY_INDICATOR_GROUPS)
 
-# 4. 物理合理性范围
-REASONABLE_RANGES = {}
-if _ti:
-    for k, v in _ti.items():
-        lo = v.get('最小')
-        hi = v.get('最大')
-        if lo is not None and hi is not None:
-            REASONABLE_RANGES[k] = (float(lo), float(hi))
-if not REASONABLE_RANGES:
-    REASONABLE_RANGES = dict(LEGACY_REASONABLE_RANGES)
+    # 3. DOMAIN_RULES（从 TOML 解析 "<1.0" 格式的判断条件）
+    # V2.2.4（H4）：统一走 config.parse_domain_condition 严格语义解析——
+    # '>=1.0'/'<=1.0' 前缀必须先于 '>'/'<' 判定（原顺序使 float('=1.0') 抛
+    # ValueError，模块导入期即崩溃）；解析失败的行跳过（防御式）。
+    _DOMAIN_OP_LAMBDA = {
+        '<':  lambda v, t: v < t,
+        '>':  lambda v, t: v > t,
+        '>=': lambda v, t: v >= t,
+        '<=': lambda v, t: v <= t,
+    }
+    _tdr = _cfg.get('试验指标_域规则', [])
+    if _tdr:
+        DOMAIN_RULES = []
+        for r in _tdr:
+            name = r.get('岩土', '')
+            key = r.get('指标', '')
+            cond = r.get('判断', '')
+            if name and key and cond:
+                parsed = parse_domain_condition(cond)
+                if parsed is not None:
+                    op, th = parsed
+                    DOMAIN_RULES.append((name, key, lambda v, t=th, o=op: _DOMAIN_OP_LAMBDA[o](v, t)))
+    else:
+        DOMAIN_RULES = list(LEGACY_DOMAIN_RULES)
 
-# 5. 土工统计参数（CV阈值/迭代次数/σ因子/最小样本数）
-_cfg_stats = _cfg.get('试验指标_统计', {})
-CV_THRESHOLD = float(_cfg_stats.get('CV阈值', 0.30))
-MAX_ITER = int(_cfg_stats.get('最大迭代次数', 50))
-OUTLIER_SIGMA = float(_cfg_stats.get('离群阈值因子', 3.0))
-MIN_STD_SAMPLE = int(_cfg_stats.get('标准值最小样本数', 6))
+    # 4. 物理合理性范围
+    REASONABLE_RANGES = {}
+    if _ti:
+        for k, v in _ti.items():
+            lo = v.get('最小')
+            hi = v.get('最大')
+            if lo is not None and hi is not None:
+                REASONABLE_RANGES[k] = (float(lo), float(hi))
+    if not REASONABLE_RANGES:
+        REASONABLE_RANGES = dict(LEGACY_REASONABLE_RANGES)
+
+    # 5. 土工统计参数（CV阈值/迭代次数/σ因子/最小样本数）
+    _cfg_stats = _cfg.get('试验指标_统计', {})
+    CV_THRESHOLD = float(_cfg_stats.get('CV阈值', 0.30))
+    MAX_ITER = int(_cfg_stats.get('最大迭代次数', 50))
+    OUTLIER_SIGMA = float(_cfg_stats.get('离群阈值因子', 3.0))
+    MIN_STD_SAMPLE = int(_cfg_stats.get('标准值最小样本数', 6))
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_config()
+
+
+_build_config()
+
 
 # 塑性状态对应的 IL 区间（TB 10012 表 4.2.7-3）
 PLASTICITY_RANGES = {

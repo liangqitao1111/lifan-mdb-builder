@@ -290,16 +290,21 @@ class MdbReader:
                              capture_output=True, text=True, timeout=120, errors="replace")
         if out.returncode != 0:
             raise RuntimeError(f"mdb-export 失败: {out.stderr[:300]}")
-        lines = out.stdout.splitlines()
-        if not lines:
+        # P2-7：改用 csv 模块解析完整文本（修复前逐行 splitlines + 手写解析，
+        # memo 字段含内嵌换行时会错行、行数与列数错位）。mdb-export 输出为
+        # 标准 CSV（引号字段、"" 转义），csv.reader 原生支持跨行引号字段。
+        import csv as _csv
+        import io as _io
+        reader = _csv.reader(_io.StringIO(out.stdout))
+        try:
+            cols = next(reader)
+        except StopIteration:
             return [], []
-        cols = lines[0].split(",")
         rows = []
-        for ln in lines[1:]:
-            if not ln.strip():
+        for ln in reader:
+            if not ln or (len(ln) == 1 and not ln[0].strip()):
                 continue
-            # 简单 CSV 解析（处理带引号字段）
-            rows.append(self._parse_csv_line(ln))
+            rows.append(ln)
             if limit and len(rows) >= limit:
                 break
         return cols, rows

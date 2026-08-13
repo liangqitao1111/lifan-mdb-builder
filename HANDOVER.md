@@ -222,3 +222,38 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 - 446 个 TOML 参数全审计；修复 14 项 bug；桌面 8 项 IDENTICAL；死代码清理 1060 行
 - 全套回归：pytest 17 passed + E2E 7 套全绿
 - 剩余可选：真实项目库复测（需用户提供 .lz/.mdb）
+
+## 13. 全面代码审核 + 修复记录（2026-08-14，17 个文件）
+
+**审核方法**：全量逐文件审读 + 子代理深度审核（config.py 1022 行 / dao.py 917 行）+ 实机验证 + 回归（pytest 17 passed、e2e_ui5 26 项 ALL PASS、真实库江村西 658 孔验证）。
+
+### 修复清单（除「# 列分页重排」展示问题外全部修复）
+
+| 级别 | 问题 | 修复 |
+|---|---|---|
+| P0-安全 | `stats/download`/`dxf/download` 未校验 db_id，URL 编码 `%2E%2E%5C%2E%2E` 可越界读任意文件（已实证 22921B） | 两端点复用 `_resolve_db_path` 校验（实测 400 封堵） |
+| P0-功能 | `get_all_test` 不读颗分表 → 全库复核 R-GRS-001 恒漏（单孔复核却有） | 批量联查 z_c_KeFen（实测全库 147→251 条，单孔/全库 5/5 一致） |
+| P0-功能 | 参数中心保存后复核不生效：`_engine_cache` 未清 + config/review.config 双模块缓存 + import 期派生常量固化 | `_reload_config_modules()`：清引擎缓存 + 双模块 reload_config + 10 个模块 reload_from_config 钩子（实测 674→436→674） |
+| P0-健壮 | config.py TOML 语法错误未捕获 → 整模块 import 崩溃、后端无法启动 | `_load_toml` 捕获全部异常返回 None；失败不缓存可重试 |
+| P1 | spt-apply 可塑性地层定位 SQL 与引擎 `(层顶,层底]` 口径不一致（层界深度归错层） | 按引擎口径逐层匹配 + 浮点容差（BGJS 更新 ABS<0.005） |
+| P1 | spt_to_weathering None→0 误判"残积土"；il_to_plasticity 空隙兜底伪造状态；IL≥ 中文键静默丢弃 | None→返回 None（_coerce 口径统一）；空隙→None；`≥`/`<` 开闭边界解析 |
+| P1 | 前端登出不吊销 token（未调 /api/logout、未清 localStorage） | 登出调 /api/logout + setToken('') + 清 session；401 同步清理 |
+| P1 | dao.set_project_type 模块级全局态并发串 A/B 口径 | review_api/feature_api 显式传 project_type |
+| P1 | page_size 只钳上限（-1 → LIMIT -1 全表返回） | 双端钳制 `max(1, min(page_size,200))` |
+| P2 | onclick 单引号注入（escAttr 不转义 `'`） | 新增 escJs，wsSelectHole/sortBy/filterBy/inlineEdit 全部应用 |
+| P2 | 前端死代码（IndexedDB 层/seed/sha256/PERMISSIONS/pendingMdbFile/openOnlineEdit） | 删除（can() 恒真兼容）；登出改后端吊销 |
+| P2 | upsert_row 无 id 列时静默 INSERT | 明确报错 |
+| P2 | dpt-correct 重型判定/数值比较与 dao 不一致 | 共用 `_is_heavy_dpt` + 容差比较 |
+| P2 | 上传无大小限制 / ZIP 炸弹 | 流式写入 512MB 上限（MAX_UPLOAD_MB 可配）+ 解压后校验 |
+| P2 | mdbtools CSV 逐行解析遇 memo 换行错行 | 改 csv.reader 全文解析 |
+| P1-⑤ | 配置派生常量 import 期固化（区间表/关键词/杆长系数/岩溶阈值/DXF 参数等） | config.py 构建器重构 + 全部消费模块 reload_from_config 钩子 |
+| 杂项 | GJKXBP0 变体探测、get_all_test_full 回退列名/kxb A-B 统一、钻孔列探测、类级列名缓存改实例级、get_test_data N+1 批量化、R-CHK-003 零深度层防护、_parse_toml_range_to_single int 防御、软土 None 防御/末档顺序无关、同值双档除零、动探轴单调校验、ALLOWED_FIELDS 补 3 列、insert_stratum tcmc 键、_retry_read 死代码、login 过期 token 清理、`_bearer_token` 占位 | 全部修复 |
+
+### 测试基线更新（行为变化，非回归）
+- `test_review_all` / `test_review_include_test`：147 → **251**（含 R-GRS-001 104 条，P0 修复的正确口径）
+- `cmp_runner.py`：一致性判定对 R-GRS-001 豁免（桌面版旧代码同样漏颗分，Web 修复后更正确；实测差异 100% 为 GRS）
+
+### 已知保留项
+- `#` 列孔内序号分页重排（纯展示，用户指定不修）
+- CORS `*` / token 内存表 / 默认 admin:admin（公网部署前收紧）
+- 真实库验证库：`C:\Users\神舟\Desktop\数据库再备份\江村西2026-0803-15.19备份.mdb`（db_id=ee7d0c77 已上传验证）

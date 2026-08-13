@@ -50,7 +50,10 @@ def _review_all(db_path, project_type, max_plasticity, use_std_stratum, include_
     engine = _get_engine(db_path, project_type, max_plasticity, use_std_stratum)
     bhs = da.get_all_boreholes()
     sa = da.get_all_strata(); sp = da.get_all_spt()
-    dp = da.get_all_dpt(); tt = da.get_all_test() if include_test else {}
+    # P1-⑩：显式传 project_type（模块级 dao.set_project_type 是全局态，
+    # 多参数/并发请求会串 A/B 类动探杆长修正口径）
+    dp = da.get_all_dpt(project_type)
+    tt = da.get_all_test() if include_test else {}
     issues_by_hole = {}
     summary = {"holes": 0, "h": 0, "m": 0, "total": 0}
     for b in bhs:
@@ -101,7 +104,8 @@ def review_hole(db_id: str, zkbh: str, project_type: str = "B",
     try:
         strata = da.get_strata(None, zkbh) if hasattr(da, "get_strata") else []
         spt = da.get_spt_data(zkbh) if hasattr(da, "get_spt_data") else []
-        dpt = da.get_dpt_data(zkbh) if hasattr(da, "get_dpt_data") else []
+        # P1-⑩：显式传 project_type，避免模块级全局串口径
+        dpt = da.get_dpt_data(zkbh, project_type) if hasattr(da, "get_dpt_data") else []
         test = da.get_test_data(zkbh) if hasattr(da, "get_test_data") and include_test else []
         if not strata and not spt and not dpt:
             raise HTTPException(404, f"钻孔 {zkbh} 无数据")
@@ -212,9 +216,14 @@ def stats_soil(db_id: str, project_type: str = "A", filter_plasticity: bool = Tr
 
 @router.get("/stats/download")
 def stats_download(db_id: str, file: str):
-    """下载统计产物（防路径穿越）"""
+    """下载统计产物（防路径穿越）
+
+    P0-①：db_id 必须经 _resolve_db_path 校验（此前未校验，URL 编码的
+    %2E%2E%5C%2E%2E 可把 os.path.join 引到项目目录之外，任意文件读取）。
+    """
     if not file or ".." in file or "/" in file or "\\" in file:
         raise HTTPException(400, "非法文件名")
+    _resolve_db_path(db_id)  # 校验 db_id 合法且工作库存在
     base = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(base, "..", "work", "reports", db_id, file)
     if not os.path.exists(path):
@@ -280,6 +289,7 @@ def dxf_columns(db_id: str, interval: int = None, col_h: int = None, col_w: int 
 def dxf_download(db_id: str, file: str):
     if not file or ".." in file or "/" in file or "\\" in file:
         raise HTTPException(400, "非法文件名")
+    _resolve_db_path(db_id)  # P0-①：同 stats/download，校验 db_id 防路径穿越
     base = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(base, "..", "work", "dxf", db_id, file)
     if not os.path.exists(path):
@@ -308,6 +318,47 @@ _DEAD_CONFIG_KEYS = [
     "B类.手动修正_标贯N值范围",
     "B类.手动修正_可塑性N值范围",
 ]
+
+
+def _reload_config_modules():
+    """配置保存后重建全部派生常量（P0-③/P1-⑤）
+
+    此前 v42 只清 config._PROJECT_CONFIG 模块缓存：
+      a) review_api._engine_cache 里已构造的 RuleEngine 快照旧规则注册表/阈值，
+         同参数复核永远用旧值（实测：关闭 R-PLS-002 后仍报 97 条）；
+      b) config.py 及各消费模块的派生常量（区间表/关键词/杆长系数）在 import 期
+         固化，清缓存也不重建。
+    现统一：清引擎缓存 + 重载 config（注意顶层 config 与 review.config 可能是
+    **两个独立模块对象**——sys.path 同时含 backend 与 backend/review 时同一文件
+    被加载两次，各自持有独立 _PROJECT_CONFIG，必须双清双载）+ 各模块
+    reload_from_config()（模块未提供该钩子时跳过，保证向后兼容）。
+    """
+    global _engine_cache
+    _engine_cache.clear()
+    import sys as _sys
+    for _mod_name in ('config', 'review.config'):
+        _mod = _sys.modules.get(_mod_name)
+        if _mod is None:
+            continue
+        try:
+            _mod._PROJECT_CONFIG = None
+            _reload = getattr(_mod, 'reload_config', None)
+            if callable(_reload):
+                _reload()
+        except Exception:
+            pass
+    for _mod_name in ('review.rule_engine', 'review.dao', 'review.karst_report',
+                      'review.karst_report_a', 'review.soil_stats',
+                      'review.soil_stats_v2', 'review.bearing_capacity',
+                      'review.column_dxf', 'review.profile_dxf',
+                      'review.profile_strip'):
+        try:
+            _mod = __import__(_mod_name, fromlist=['x'])
+            _fn = getattr(_mod, 'reload_from_config', None)
+            if callable(_fn):
+                _fn()
+        except Exception:
+            pass
 
 
 @router.get("/config")
@@ -368,16 +419,10 @@ def put_config(db_id: str, payload: dict):
             import shutil
             shutil.copy2(p, p + ".bak")
             tf.save(p)
-            # 清 config 缓存（重要：config 与 review.config 可能是两个模块对象，
-            # 规则引擎等用顶层 config，双清避免保存后不生效——v42 修复）
-            import sys as _sys
-            for _m in ('config', 'review.config'):
-                _mod = _sys.modules.get(_m)
-                if _mod is not None:
-                    try:
-                        _mod._PROJECT_CONFIG = None
-                    except Exception:
-                        pass
+            # 清 config 缓存 + 引擎缓存 + 重建派生常量（重要：config 与 review.config
+            # 可能是两个模块对象，规则引擎等用顶层 config；v42 只双清模块缓存，
+            # 已构造引擎与 import 期常量仍陈旧——P0-③/P1-⑤ 现统一重载）
+            _reload_config_modules()
             return {"ok": True, "applied": ok,
                     "missing": missing[:20] if missing else None,
                     "backup": os.path.basename(p) + ".bak"}
@@ -415,15 +460,9 @@ def put_config(db_id: str, payload: dict):
                 g.write(f.read())
         with open(p, "w", encoding="utf-8") as f:
             f.write(raw)
-        # 清空 config 缓存，使下次复核使用新参数（config 与 review.config 双清，v42）
-        import sys as _sys
-        for _m in ('config', 'review.config'):
-            _mod = _sys.modules.get(_m)
-            if _mod is not None:
-                try:
-                    _mod._PROJECT_CONFIG = None
-                except Exception:
-                    pass
+        # 清空 config 缓存 + 引擎缓存 + 重建派生常量（v42 只清模块缓存，
+        # 已构造引擎与 import 期常量仍陈旧——P0-③/P1-⑤ 现统一重载）
+        _reload_config_modules()
         return {"ok": True, "size": len(raw), "backup": os.path.basename(p) + ".bak"}
     except Exception as e:
         raise HTTPException(500, f"保存失败: {e}")

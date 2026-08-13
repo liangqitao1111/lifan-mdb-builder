@@ -191,27 +191,55 @@ def _make_bins(prefix_label, thresholds):
     return bins
 
 
-# 附表8 统计维度常量（从 TOML 加载）
-_karst_cfg = load_project_config().get('岩溶统计', {})
-_height_thresholds = _karst_cfg.get('洞高阈值', [0, 1, 5, 10])
-_depth_thresholds = _karst_cfg.get('埋深阈值', [0, 10, 30, 50])
-STAT_VARS = {
-    'height': {'label': '溶洞高度H（m）', 'bins': _make_bins('H', _height_thresholds),
-               'fn': _make_bin_fn(_height_thresholds)},
-    'depth':  {'label': '发育深度L（m）', 'bins': _make_bins('L', _depth_thresholds),
-               'fn': _make_bin_fn(_depth_thresholds)},
-    'fill':   {'label': '溶洞充填程度',    'bins': ['无充填', '半充填', '全充填'],
-               'fn': None},  # 特殊：按岩土名称推断
-}
+# 附表8 统计维度常量（从 TOML 加载；P1-⑤：可经 reload_from_config 重建）
+_kheight_thresholds = [0, 1, 5, 10]
+_kdepth_thresholds = [0, 10, 30, 50]
+_kline_weak = 5.0
+_kline_med = 20.0
+_karea_weak = 15.0
+_karea_med = 45.0
+
+
+def _build_karst_constants():
+    """重建模块级岩溶统计派生常量（import 时与配置保存后各调用一次）"""
+    global _kheight_thresholds, _kdepth_thresholds
+    global _kline_weak, _kline_med, _karea_weak, _karea_med
+    global STAT_VARS
+    _karst_cfg = load_project_config().get('岩溶统计', {})
+    _kheight_thresholds = _karst_cfg.get('洞高阈值', [0, 1, 5, 10])
+    _kdepth_thresholds = _karst_cfg.get('埋深阈值', [0, 10, 30, 50])
+    try:
+        _kline_weak = float(_karst_cfg.get('线岩溶率_弱发育', 5))
+        _kline_med = float(_karst_cfg.get('线岩溶率_中等发育', 20))
+        _karea_weak = float(_karst_cfg.get('见洞隙率_弱发育', 15))
+        _karea_med = float(_karst_cfg.get('见洞隙率_中等发育', 45))
+    except (TypeError, ValueError):
+        pass
+    STAT_VARS = {
+        'height': {'label': '溶洞高度H（m）', 'bins': _make_bins('H', _kheight_thresholds),
+                   'fn': _make_bin_fn(_kheight_thresholds)},
+        'depth':  {'label': '发育深度L（m）', 'bins': _make_bins('L', _kdepth_thresholds),
+                   'fn': _make_bin_fn(_kdepth_thresholds)},
+        'fill':   {'label': '溶洞充填程度',    'bins': ['无充填', '半充填', '全充填'],
+                   'fn': None},  # 特殊：按岩土名称推断
+    }
+
+
+def reload_from_config():
+    """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    _build_karst_constants()
+
+
+_build_karst_constants()
 
 # 发育程度判定阈值（DBJ/T 15-136-2018 表3.1.4，从 TOML 加载）
 #   线岩溶率(%)：弱<5、中5~20、强>20；钻孔见洞隙率(%)：弱<15、中15~45、强>45
 #   判定规则：三个指标中从高到低有 1 个达标即定为该等级
 #   （本项目仅用 线岩溶率 + 钻孔见洞率 两项，地表岩溶发育密度不参与）
-_LINE_WEAK = float(_karst_cfg.get('线岩溶率_弱发育', 5))
-_LINE_MEDIUM = float(_karst_cfg.get('线岩溶率_中等发育', 20))
-_AREA_WEAK = float(_karst_cfg.get('见洞隙率_弱发育', 15))
-_AREA_MEDIUM = float(_karst_cfg.get('见洞隙率_中等发育', 45))
+_LINE_WEAK = _kline_weak
+_LINE_MEDIUM = _kline_med
+_AREA_WEAK = _karea_weak
+_AREA_MEDIUM = _karea_med
 
 def _classify_fill(name):
     """按岩土名称判断充填类型
