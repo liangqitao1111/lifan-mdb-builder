@@ -32,7 +32,7 @@ import threading
 import uuid
 import zipfile
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -84,10 +84,11 @@ def login(payload: LoginPayload):
 
 
 @app.post("/api/logout")
-def logout():
-    hdr = _bearer_token()
-    if hdr:
-        auth.logout(hdr)
+def logout(request: Request):
+    hdr = request.headers.get("Authorization", "")
+    token = hdr[7:] if hdr.startswith("Bearer ") else None
+    if token:
+        auth.logout(token)
     return {"ok": True}
 
 

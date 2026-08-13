@@ -792,21 +792,20 @@ document.addEventListener('keydown', e => {
   const inEditable = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
   const k = e.key || '';
   if ((e.metaKey || e.ctrlKey) && (k === 'k' || k === 'K')) {
-    const si = document.getElementById('onlineSearch');
-    if (si) { e.preventDefault(); si.focus(); si.select(); }
+    const gs = document.getElementById('globalSearch');
+    if (gs) { e.preventDefault(); gs.focus(); gs.select(); }
     return;
   }
   if (k === 'Escape' && !inEditable) {
-    const si = document.getElementById('onlineSearch');
-    if (si && si.value && WS.zkbh) {
-      si.value = WS.zkbh;
+    const gs = document.getElementById('globalSearch');
+    if (gs && gs.value) { gs.value = ''; }
+    if (WS.zkbh) {
       OData.keyword = WS.zkbh; OData.searchCol = 'ZKBH'; OData.exact = true;
       OData.page = 1;
       document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.dataset.zk === WS.zkbh));
       if (typeof loadOnlinePage === 'function') loadOnlinePage(1);
       e.preventDefault();
-    } else if (si && si.value && !WS.zkbh) {
-      si.value = '';
+    } else {
       OData.keyword = ''; OData.searchCol = '';
       OData.page = 1;
       if (typeof loadOnlinePage === 'function') loadOnlinePage(1);
@@ -814,6 +813,25 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+
+// 顶栏全局搜索：Enter 按钻孔编号模糊定位并选中（v19 删除工作台搜索框后此处恢复功能）
+(function bindGlobalSearch(){
+  const gs = document.getElementById('globalSearch');
+  if (!gs || gs.dataset.bound) return;
+  gs.dataset.bound = '1';
+  gs.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const kw = gs.value.trim();
+    if (!kw) return;
+    const hole = [...document.querySelectorAll('.ws-hole')].find(el => (el.dataset.zk || '').includes(kw));
+    if (hole) {
+      hole.click();
+      showToast('已定位 ' + (hole.dataset.zk || ''), 'info');
+    } else {
+      showToast('未找到含「' + kw + '」的钻孔', 'err');
+    }
+  });
+})();
 
 document.getElementById('loginForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -1830,7 +1848,11 @@ async function toolsIssues(){
   if (!box) return;
   box.innerHTML = '<div style="padding:24px;color:var(--steel);">正在导出复核问题清单…</div>';
   try {
-    const r = await apiPost('/db/' + API_STATE.dbId + '/issues-export', { include_test: false });
+    const r = await apiPost('/db/' + API_STATE.dbId + '/issues-export', {
+      include_test: WS_SETTINGS.include_test,
+      project_type: WS_SETTINGS.project_type, max_plasticity: WS_SETTINGS.max_plasticity,
+      use_std_stratum: WS_SETTINGS.use_std_stratum,
+    });
     box.innerHTML = '<div style="padding:16px 20px;background:#e8f8ee;border-radius:12px;font-size:13px;">✓ 已生成 <b>' + escHtml(r.file || '') + '</b> <button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;margin-left:10px;" onclick="dlStats(this.dataset.f)" data-f="' + escAttr(r.file || '') + '">下载</button></div>';
   } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">导出失败：' + escHtml((e && e.message) || e) + '</div>'; }
 }
@@ -1840,7 +1862,10 @@ async function toolsSpt(){
   if (!box) return;
   box.innerHTML = '<div style="padding:24px;color:var(--steel);">扫描修正建议…</div>';
   try {
-    const data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {});
+    const data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {
+      project_type: WS_SETTINGS.project_type, max_plasticity: WS_SETTINGS.max_plasticity,
+      use_std_stratum: WS_SETTINGS.use_std_stratum,
+    });
 
     const flat = [];
     (data.suggestions || []).forEach(g => {
@@ -2100,16 +2125,25 @@ async function saveConfig(){
   const st = document.getElementById('cfgStatus');
   if (st) { st.textContent = '正在收集修改…'; st.style.color = 'var(--slate)'; }
   try {
-    const updates = {};
+    const updates = {}, deletes = [];
     document.querySelectorAll('#content [data-path]').forEach(el => {
       if (el.disabled) return;
       const path = el.dataset.path, type = el.dataset.type;
       if (type === 'bool') updates[path] = el.checked;
       else if (type === 'num') updates[path] = el.value === '' ? 0 : Number(el.value);
       else if (type === 'arr') updates[path] = el.value.split(',').map(s => s.trim()).filter(Boolean).map(s => /^\d+(\.\d+)?$/.test(s) ? Number(s) : s);
-      else updates[path] = el.dataset.state !== undefined ? el.dataset.state : el.value;
+      else if (el.dataset.state !== undefined) {
+        // 状态映射行：input=范围key、data-state=状态值；key 修改 → 新key写 updates + 旧key delete（原子替换）
+        const oldKey = path.split('.').pop();
+        const nk = el.value.trim();
+        if (nk && nk !== oldKey) {
+          updates[path.slice(0, path.length - oldKey.length) + nk] = el.dataset.state;
+          deletes.push(path);
+        }
+      }
+      else updates[path] = el.value;
     });
-    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { updates });
+    const r = await apiPut('/db/' + API_STATE.dbId + '/config', { updates, deletes });
     if (st) {
       st.textContent = '✓ 已保存 ' + (r.applied || 0) + ' 项' + ((r.missing || []).length ? '，未识别 ' + r.missing.length + ' 项（表数组只读）' : '') + ' · 备份 ' + (r.backup || '') + ' · 保留注释';
       st.style.color = 'var(--success)';
@@ -2124,7 +2158,7 @@ async function runStats(kind){
   if (!API_STATE.online || !API_STATE.dbId) { showToast('请先上传数据库（在线模式）', 'err'); return; }
   const api = kind === 'karst_b' ? '/db/' + API_STATE.dbId + '/stats/karst?project_type=B'
            : kind === 'karst_a' ? '/db/' + API_STATE.dbId + '/stats/karst?project_type=A'
-           : '/db/' + API_STATE.dbId + '/stats/soil?project_type=A';
+           : '/db/' + API_STATE.dbId + '/stats/soil?project_type=' + ((WS_SETTINGS && WS_SETTINGS.project_type) || 'A');
   const label = kind === 'karst_b' ? '岩溶统计（B 类）' : kind === 'karst_a' ? '岩溶统计（A 类）' : '土工统计';
   showToast('正在生成' + label + '…', 'info');
   try {

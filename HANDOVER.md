@@ -1,7 +1,7 @@
 # 理反 Web · 交接文档（HANDOVER）
 
-> 更新：2026-08-13 18:30 · 服务地址：http://127.0.0.1:8766/
-> 最新提交：见下方 git 历史（main，v33 已含 v1~v32 全部改动）· 工作区无未提交代码改动
+> 更新：2026-08-13 20:40 · 服务地址：http://127.0.0.1:8766/
+> 最新提交：见下方 git 历史（main，v34 已含 v1~v33）· 工作区无未提交代码改动
 > 代码规模：`index.html` 2749 行（v31 清理后）/ 后端 FastAPI
 
 ---
@@ -84,6 +84,7 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 | **v31** | 移除**全部注释** + 删除 215 行视觉粗糙 dead code（renderReview/renderBorehole/renderSpt 假数据页，route 归一化后不可达）；3023→2759 行 |
 | **v32** | 生成 MDB 页删除教学性文字（顶部副标题/4 步流程指示器/日志 API 路径说明），保留核心按钮与状态 |
 | **v33** | **可塑性修正闭环**：R-DEN-007 建议前端展示「可塑性 流塑→软塑（状态修正）」+ 一键应用写回地层 TCKSX（后端 spt-apply 定位深度所在层，新增 s_updated 计数）；列设置重名修复：TCYMC 显示「岩土名称（TCYMC）」默认不勾选 |
+| **v34** | **全量复核修复（6 项）**：① db.py search_col 列白名单（防 SQL 注入面）；② 参数中心状态映射 key 编辑真实生效（updates+deletes 原子替换，此前静默失效）；③ logout API 真实吊销 token（此前 placeholder 无效）；④ toolsIssues/toolsSpt 传 WS_SETTINGS 复核参数（此前默认 B/硬塑 与设置脱节）；⑤ 土工统计 project_type 跟随设置（此前固定 A）；⑥ globalSearch 恢复绑定（Enter 定位钻孔 + Ctrl+K/Esc 修复） |
 
 ## 4. 当前功能清单（v32 状态）
 
@@ -134,9 +135,10 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 |---|---|---|
 | `work/e2e_ui5.mjs` | 交互增强 26 项 | 已同步 v2 冻结开关断言（默认不冻结+开关开启冻结）、v3 CY 下拉断言 |
 | `work/e2e_v33.mjs` | v33 专项 9 项（可塑性展示/写回/列设置重名） | ALL PASS |
+| `work/e2e_v34.mjs` | v34 专项 8 项（注入防护/logout吊销/配置编辑/参数透传/全局搜索） | ALL PASS |
 | `work/e2e_ui4.mjs` | 排版专项 | 已同步 v5 土工核心列、v16 颗分 z_c_KeFen |
 | `tests/e2e_ui.mjs` | UI 基线 12 项 | 未动 |
-| `tests/e2e_api.py` | API 回归 **17 项**（v33 新增 test_spt_apply_plasticity 可塑性写回+恢复） | 17 passed |
+| `tests/e2e_api.py` | API 回归 **17 项**（v33 可塑性写回用例） | 17 passed |
 
 运行：`node work/e2e_uiX.mjs` / `node tests/e2e_ui.mjs` / `python -m pytest tests/e2e_api.py -q`
 **注意**：v18 后 E2E 断言后端 `_issue_to_dict` 新增了 `layer_index/ref_value` 字段（纯新增，不破坏既有断言）；v24 新增 R-SPT-001 规则（测试库无跨层数据 → 0 条）。
@@ -196,6 +198,7 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 4. ~~可塑性条目（R-DEN-007）的状态写回~~ ✅ **v33 已完成**：前端展示+确认文案+一键应用写回 TCKSX（后端定位深度所在层）。
 5. ~~地层列设置"岩土名称"出现 2 次~~ ✅ **v33 已完成**：TCYMC 显示「岩土名称（TCYMC）」默认不勾选。
 6. `renderReview/renderBorehole/renderSpt` 已删除（v31）——若未来需要独立复核/标贯页，需基于 renderTools/renderWorkspace 重建。
+7. **v34 复核后遗留（低危，可后续处理）**：review_strata 规则无 per-rule 异常保护（单规则异常中断整孔复核）；inlineEdit 的 idJs 主键若含引号可注入 onclick（文本主键场景）；CORS `*`/上传无大小限制/token 内存表（部署公网前需收紧）；renderDataOnline 为 v31 清理遗漏的死代码（不可达）；jumpToIssue 在用户自定义排序后行索引可能错位。
 
 ---
 *交接完毕：v1~v32 改动已归档；5 个文件待提交；本地服务已运行最新代码。*

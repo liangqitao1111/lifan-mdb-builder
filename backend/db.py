@@ -211,6 +211,9 @@ def get_rows(db_path, table, page=1, page_size=50, keyword=None, search_col=None
     conn = conn_for(db_path)
     try:
         cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{table}")')]
+        # 安全：search_col/order_by 必须命中真实列，否则忽略（防 SQL 注入）
+        if search_col and search_col not in cols:
+            search_col = ""
         where, params = "", []
         if keyword:
             if exact and search_col:

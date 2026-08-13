@@ -323,7 +323,8 @@ def put_config(db_id: str, payload: dict):
     if not os.path.exists(p):
         raise HTTPException(404, f"配置文件不存在: {p}")
     updates = (payload or {}).get("updates")
-    if isinstance(updates, dict) and updates:
+    deletes = (payload or {}).get("deletes") or []
+    if isinstance(updates, dict) and updates or deletes:
         try:
             from review.toml_preserve import TomlFile
             tf = TomlFile(p)
@@ -331,8 +332,15 @@ def put_config(db_id: str, payload: dict):
             for path, val in updates.items():
                 if tf.set(path, val):
                     ok += 1
+                elif tf.add(path, val):
+                    ok += 1
                 else:
                     missing.append(path)
+            for d in deletes:
+                if tf.delete(d):
+                    ok += 1
+                elif d not in missing:
+                    missing.append(d)
             if not tf.is_dirty():
                 return {"ok": True, "applied": 0, "unchanged": True}
             # 备份后保存（保留注释的行级写入）
