@@ -39,7 +39,10 @@ def _get_da(db_path):
 
 def _issue_to_dict(i):
     return {"rule_id": i.rule_id, "level": i.risk_level,
-            "field": getattr(i, "field", ""), "message": i.message}
+            "field": getattr(i, "field", ""), "message": i.message,
+            # v18：透传行索引/参考值，供前端「问题卡片 → 定位高亮表格行」
+            "layer_index": getattr(i, "layer_index", -1),
+            "ref_value": getattr(i, "ref_value", 0.0)}
 
 
 def _review_all(db_path, project_type, max_plasticity, use_std_stratum, include_test=True):

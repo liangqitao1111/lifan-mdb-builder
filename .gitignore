@@ -14,3 +14,9 @@ lizheng_review.log
 
 # 配置备份
 *.bak
+
+# 运行时产物 / 备份 / 截图
+.workbuddy/
+screenshots/
+*.log
+

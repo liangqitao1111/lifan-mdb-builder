@@ -338,6 +338,8 @@ class RuleEngine:
             test_data = [{**t, 'qysd': float(t.get('qysd', 0) or 0),
                           'yxzs': float(t.get('yxzs', 0)) if t.get('yxzs') is not None else None} for t in test_data]
         issues = []
+        # V24：跨层标贯异常检查——标贯深度穿越层范围时优先报异常（在逐层击数规则前执行）
+        issues.extend(self._check_spt_cross_layer(strata, spt_data))
         for i, layer in enumerate(strata):
             depth = layer['tccdsd']
             prev_depth = strata[i - 1]['tccdsd'] if i > 0 else 0
@@ -363,6 +365,33 @@ class RuleEngine:
         return ReviewIssue(rule_id=rid, risk_level=level, layer_index=ctx['index'],
                            field=field, message=msg,
                            layer_label=_layer_label(layer.get('tczcbh', ''), layer.get('tcycbh', '')))
+
+    def _check_spt_cross_layer(self, strata, spt_data):
+        """V24 跨层标贯异常：标贯记录深度应落在某一地层的 (层顶, 层底] 区间内；
+        不在任何层范围（层间空隙 / 超出最浅~最深范围）→ 判定异常。
+        优先级高于标贯击数规则（R-DEN-001/007/008）：在逐层规则前执行。"""
+        issues = []
+        if not strata or not spt_data:
+            return issues
+        ranges = []
+        prev = 0.0
+        for layer in strata:
+            depth = float(layer.get('tccdsd', 0) or 0)
+            ranges.append((prev, depth))
+            prev = depth
+        lo_all = ranges[0][0] if ranges else 0
+        hi_all = ranges[-1][1] if ranges else 0
+        for s in spt_data:
+            d = float(s.get('bgdsd', 0) or 0)
+            if d <= 0:
+                continue
+            if not any(lo < d <= hi for lo, hi in ranges):
+                issues.append(ReviewIssue(
+                    rule_id='R-SPT-001', risk_level='H', layer_index=-1,
+                    field='BGDSD',
+                    message=f'标贯深度 {_norm_state_key(d)}m 不在任何地层深度范围内（层序 {_norm_state_key(lo_all)}~{_norm_state_key(hi_all)}m），疑似跨层或深度误录',
+                    ref_value=d))
+        return issues
 
     # ---- 颜色/风化程度漏填检查 ----
     def _chk_tcys(self, ctx):

@@ -30,10 +30,24 @@
   --tint-peach: #fff2e8;
   --tint-yellow: #fff8e6;
   --tint-yellow-bold: #ffd60a;
+
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 28px; --space-8: 32px;
+  --fs-xs: 11px;  --fs-sm: 12px;  --fs-base: 13px; --fs-md: 14px;
+  --fs-lg: 16px;  --fs-xl: 20px;  --fs-2xl: 26px; --fs-3xl: 32px;
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 16px; --radius-2xl: 20px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 3px rgba(0,0,0,.04), 0 2px 6px rgba(0,0,0,.04);
+  --shadow-2: 0 6px 18px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.04);
+  --shadow-3: 0 18px 48px rgba(0,0,0,.12), 0 2px 8px rgba(0,0,0,.06);
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --t-fast: .15s; --t-mid: .22s;
+  --info: #2f7bff;
+  --tint-info: #e8f1fc;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --shadow-card: 0 8px 30px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
-}}
+  --shadow-card: var(--shadow-1);
+}
 :root[data-theme="dark"] {
   --canvas: #000000;
   --surface: #1c1c1e;
@@ -52,7 +66,8 @@
   --tint-mint: #0f2a1a;
   --tint-peach: #2a1d0f;
   --tint-yellow: #2a2410;
-  --shadow-card: 0 8px 30px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+  --tint-info: #10243d;
+  --shadow-card: 0 6px 18px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
 }
 :root[data-theme="dark"] .topbar { background: rgba(0,0,0,.8); backdrop-filter: blur(12px); }
 :root[data-theme="dark"] .ws-panel, :root[data-theme="dark"] .ws-stat,
@@ -96,7 +111,26 @@ a:hover { text-decoration: underline; }
 
 .app { display: none; min-height: 100vh; }
 .app.show { display: flex; }
-.sidebar { flex: 0 0 240px; background: var(--surface); padding: 24px 0; display: flex; flex-direction: column; gap: 4px; }
+.sidebar { flex: 0 0 240px; background: var(--surface); padding: 24px 0; display: flex; flex-direction: column; gap: 4px; transition: flex-basis .25s var(--ease); position: relative; }
+.sidebar.collapsed { flex-basis: 56px; }
+.sidebar.collapsed .sb-name,
+.sidebar.collapsed .nav-text,
+.sidebar.collapsed .sb-section,
+.sidebar.collapsed .sb-toggle-label { display: none; }
+.sidebar.collapsed .sb-head { justify-content: center; padding: 0 0 12px; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: 0; }
+.sidebar.collapsed:hover { flex-basis: 240px; box-shadow: 8px 0 24px rgba(0,0,0,.08); z-index: 10; }
+.sidebar.collapsed:hover .sb-name,
+.sidebar.collapsed:hover .nav-text,
+.sidebar.collapsed:hover .sb-section,
+.sidebar.collapsed:hover .sb-toggle-label { display: inline; }
+.sidebar.collapsed:hover .sb-head { justify-content: flex-start; padding: 0 24px 12px; }
+.sidebar.collapsed:hover .nav-item { justify-content: flex-start; padding: 0 24px; }
+.sb-toggle { position: absolute; right: -14px; top: 18px; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 1px solid var(--hairline-strong); color: var(--slate); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.08); z-index: 11; transition: all . .15s; }
+.sb-toggle:hover { color: var(--primary); border-color: var(--primary); transform: scale(1.08); }
+.sidebar.collapsed .sb-toggle svg { transform: rotate(180deg); }
+.sidebar:not(.collapsed) .sb-toggle svg { transform: rotate(0deg); }
+.sb-toggle svg { transition: transform .25s var(--ease); }
 .sidebar .sb-head { display: flex; align-items: center; gap: 10px; padding: 0 24px 12px; }
 .sidebar .sb-logo { width: 28px; height: 28px; background: var(--primary); border-radius: 7px; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
 .sidebar .sb-name { font-size: 16px; font-weight: 600; }
@@ -119,7 +153,7 @@ a:hover { text-decoration: underline; }
 .topbar .avatar span { font-size: 13px; font-weight: 500; color: var(--charcoal); }
 .topbar .bell { width: 36px; height: 36px; background: var(--surface); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
 
-.content { flex: 1; padding: 32px; overflow-y: auto; }
+.content { flex: 1; padding: 24px; overflow-y: auto; }
 .content h1.page-title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
 .content .page-sub { color: var(--steel); font-size: 13px; margin-bottom: 20px; }
 
@@ -198,7 +232,8 @@ a:hover { text-decoration: underline; }
 .policy-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 14px; }
 .switch-row { display: flex; justify-content: space-between; align-items: center; background: var(--surface-soft); padding: 14px; border-radius: 8px; margin-top: 4px; }
 .switch { width: 40px; height: 22px; background: var(--success); border-radius: 11px; position: relative; cursor: pointer; }
-.switch::after { content: ""; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; }
+
+.switch-row .switch::after { content: ""; position: absolute; right: 2px; top: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; }
 .setting-row { display: flex; justify-content: space-between; align-items: center; background: var(--surface-soft); padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; }
 .setting-row .lbl { color: var(--slate); font-size: 13px; }
 .setting-row .val { font-weight: 600; color: var(--ink); font-size: 13px; }
@@ -245,6 +280,48 @@ a:hover { text-decoration: underline; }
 .toast.show { display: block; }
 .toast.err { background: var(--error); }
 .toast.ok { background: var(--success); }
+.toast.info { background: var(--info); }
+
+.btn { position: relative; }
+.btn.loading { color: transparent !important; pointer-events: none; }
+.btn.loading::after { content: ""; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: btn-spin .8s linear infinite; color: #fff; }
+.btn-secondary.loading::after { color: var(--primary); }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+.skeleton { display: flex; flex-direction: column; gap: 10px; padding: var(--space-4); }
+.skeleton .sk-line { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-soft) 0%, var(--hairline) 50%, var(--surface-soft) 100%); background-size: 200% 100%; animation: sk-shine 1.4s ease-in-out infinite; }
+.skeleton .sk-line.short { width: 40%; }
+.skeleton .sk-line.mid { width: 65%; }
+.skeleton .sk-line.long { width: 90%; }
+.skeleton .sk-row { display: flex; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+.skeleton .sk-row .sk-line { flex: 1; }
+.skeleton .sk-row .sk-line.short { flex: 0 0 50px; }
+@keyframes sk-shine { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+.seg-tabs { display: inline-flex; background: var(--surface-soft); border: 1px solid var(--hairline); border-radius: var(--radius-pill); padding: 3px; gap: 2px; }
+.seg-tabs .seg { padding: 6px 14px; font-size: var(--fs-base); font-weight: 500; color: var(--slate); border-radius: var(--radius-pill); cursor: pointer; transition: all var(--t-fast) var(--ease); user-select: none; }
+.seg-tabs .seg:hover { color: var(--ink); }
+.seg-tabs .seg.on { background: #fff; color: var(--primary); font-weight: 600; box-shadow: var(--shadow-1); }
+:root[data-theme="dark"] .seg-tabs { background: var(--surface-soft); border-color: var(--hairline); }
+:root[data-theme="dark"] .seg-tabs .seg.on { background: var(--canvas); color: var(--primary); }
+
+.search-in:focus-within, .topbar .search:focus-within { box-shadow: 0 0 0 3px rgba(0,113,227,.18); border-color: var(--primary) !important; transition: box-shadow var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+
+.ws-issue { padding: 12px 14px; border-bottom: 1px solid #f0f0f2; font-size: 13px; line-height: 1.5; transition: background var(--t-fast); }
+.ws-issue:hover { background: var(--surface-soft); }
+.ws-issue .rid { font-weight: 700; margin-right: 6px; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+.ws-issue.issue-h .rid { background: rgba(255,59,48,.12); }
+.ws-issue.issue-m .rid { background: rgba(255,159,10,.14); }
+.ws-issue .msg { color: var(--charcoal); }
+.ws-issue .fld { color: var(--muted); font-size: 11.5px; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+@keyframes rowFlashAnim {
+  0%, 100% { background-color: transparent; }
+  25%, 55% { background-color: rgba(255, 179, 0, .42); }
+  75% { background-color: rgba(255, 179, 0, .18); }
+}
+.t-row.flash { animation: rowFlashAnim 1.2s ease 2; }
+.t-row.flash-flat { background-color: rgba(255, 179, 0, .30) !important; }
 
 .connbar { display: flex; align-items: center; gap: 8px; padding: 8px 32px; font-size: 12px; border-bottom: 1px solid var(--hairline); }
 .connbar .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 8px; }
@@ -258,22 +335,63 @@ a:hover { text-decoration: underline; }
 .pagination select { border: 1px solid var(--hairline-strong); border-radius: 6px; padding: 4px 6px; background: #fff; color: var(--ink); }
 .build-actions { display: flex; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--hairline-strong); }
 
-
 .ws-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
 .ws-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; color: var(--ink); line-height: 1.1; }
 .ws-sub { color: var(--slate); font-size: 14px; margin-top: 4px; }
-.ws-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
-.ws-stat { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow-card); }
-.ws-stat .lbl { font-size: 12px; color: var(--steel); font-weight: 600; letter-spacing: .3px; }
-.ws-stat .num { font-size: 26px; font-weight: 700; margin-top: 4px; letter-spacing: -0.5px; }
-.ws-stat .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.ws-grid { display: grid; grid-template-columns: 250px 1fr 320px; gap: 14px; align-items: start; }
-.ws-panel { background: #fff; border: 1px solid var(--hairline); border-radius: 16px; box-shadow: var(--shadow-card); overflow: hidden; }
+.ws-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-bottom: var(--space-5); }
+.ws-stat { background: #fff; border: 1px solid var(--hairline); border-radius: var(--radius-xl); padding: 18px 20px; box-shadow: var(--shadow-card); transition: transform var(--t-mid) var(--ease), box-shadow var(--t-mid) var(--ease); cursor: default; }
+.ws-stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+.ws-stat .lbl { font-size: var(--fs-sm); color: var(--steel); font-weight: 600; letter-spacing: .3px; display: flex; align-items: center; gap: var(--space-2); }
+.ws-stat .lbl::before { content:""; width:6px; height:6px; border-radius:50%; background: var(--muted); }
+.ws-stat[data-tone="warn"] .lbl::before { background: var(--warning); }
+.ws-stat[data-tone="error"] .lbl::before { background: var(--error); }
+.ws-stat[data-tone="ok"] .lbl::before { background: var(--success); }
+.ws-stat .num { font-size: 28px; font-weight: 700; margin-top: var(--space-2); letter-spacing: -0.5px; line-height: 1.1; }
+.ws-stat .sub { font-size: var(--fs-sm); color: var(--muted); margin-top: 2px; }
+.ws-grid { display: grid; grid-template-columns: 190px 1fr 240px; gap: 12px; align-items: start; }
+.ws-panel { background: #fff; border: 1px solid var(--hairline); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); overflow: hidden; transition: box-shadow var(--t-mid) var(--ease); }
+
+.cfg-grid { columns: 2; column-gap: 14px; margin-top: 4px; }
+.cfg-panel { break-inside: avoid; margin-bottom: 14px; }
+.cfg-panel { border-radius: 14px; }
+.cfg-panel .p-head { padding: 12px 16px; font-size: 13px; font-weight: 700; letter-spacing: .2px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 8px; background: linear-gradient(180deg, rgba(0,113,227,.035), transparent); }
+.cfg-panel .p-head::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 3px rgba(0,113,227,.12); flex: 0 0 8px; }
+.cfg-panel:nth-child(3n+2) .p-head::before { background: #a05ce6; box-shadow: 0 0 0 3px rgba(160,92,230,.14); }
+.cfg-panel:nth-child(3n+3) .p-head::before { background: var(--success); box-shadow: 0 0 0 3px rgba(52,199,89,.14); }
+.cfg-panel .p-head .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-soft); border-radius: 999px; padding: 1px 8px; }
+.cfg-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; padding: 12px 14px 14px; align-content: start; }
+.cfg-sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; font-size: 12.5px; font-weight: 700; color: var(--charcoal); }
+.cfg-sub::before { content: ""; width: 14px; height: 2px; border-radius: 1px; background: var(--primary); opacity: .55; flex: 0 0 14px; }
+.cfg-card { background: var(--surface-soft); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; height: 100%; transition: border-color var(--t-fast) var(--ease); }
+.cfg-card.col { flex-direction: column; align-items: stretch; }
+.cfg-card:hover { border-color: var(--hairline-strong); }
+.cfg-card .cfg-label { font-size: 12px; color: var(--steel); font-weight: 600; flex: 0 1 auto; max-width: 62%; display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-card.col .cfg-label { max-width: 100%; }
+.cfg-card .cfg-label::before { content: "•"; color: var(--muted); font-size: 10px; }
+.cfg-card.ro { opacity: .78; }
+.cfg-card .cfg-val { font-size: 12.5px; color: var(--ink); }
+.cfg-note { grid-column: 1 / -1; background: rgba(0,113,227,.045); border: 1px solid rgba(0,113,227,.14); border-radius: 10px; padding: 8px 12px; font-size: 12px; color: var(--steel); line-height: 1.55; }
+.cfg-note .cfg-label { color: var(--primary); font-weight: 700; font-size: 11.5px; margin-bottom: 2px; letter-spacing: .3px; }
+.cfg-state-table { grid-column: 1 / -1; border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--canvas); }
+.cfg-state-row { display: grid; grid-template-columns: 118px 1fr; align-items: center; border-bottom: 1px solid var(--hairline); }
+.cfg-state-row:last-child { border-bottom: none; }
+.cfg-state-row .st { padding: 7px 12px; font-size: 12.5px; font-weight: 600; color: var(--charcoal); background: var(--surface-soft); border-right: 1px solid var(--hairline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cfg-state-row input { margin: 6px 10px; min-width: 0; }
+@media (max-width: 720px) {
+  .cfg-grid { columns: 1; }
+  .cfg-body { grid-template-columns: 1fr; }
+  .cfg-state-row { grid-template-columns: 96px 1fr; }
+}
+.ws-panel:hover { box-shadow: var(--shadow-2); }
 .ws-panel .p-head { padding: 12px 16px; border-bottom: 1px solid var(--hairline); font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-.ws-hole { padding: 8px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; border-bottom: 1px solid #f0f0f2; }
-.ws-hole:hover { background: var(--surface-soft); }
-.ws-hole.active { background: #e8f1fc; color: var(--primary); font-weight: 600; }
-.ws-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 600; margin-left: 4px; }
+.ws-hole { padding: 8px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; border-bottom: 1px solid #f0f0f2; border-left: 3px solid transparent; border-radius: 0 8px 8px 0; margin: 1px 0; transition: all var(--t-fast) var(--ease); }
+.ws-hole:hover { background: var(--surface-soft); padding-left: 16px; }
+.ws-hole.active { background: linear-gradient(90deg, rgba(0,113,227,.12), rgba(0,113,227,.03)); color: var(--primary); font-weight: 600; border-left-color: var(--primary); }
+.ws-hole.risk-h { border-left-color: var(--error); }
+.ws-hole.risk-m { border-left-color: var(--warning); }
+.ws-hole > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.ws-hole > span:last-child { white-space: nowrap; flex-shrink: 0; margin-left: 8px; }
+.ws-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 600; margin-left: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .ws-badge.h { background: var(--error); }
 .ws-badge.m { background: var(--warning); }
 .ws-issue { padding: 10px 14px; border-bottom: 1px solid #f0f0f2; font-size: 12.5px; }
@@ -293,7 +411,6 @@ a:hover { text-decoration: underline; }
 .ws-tool-card .card .d { font-size: 12.5px; color: var(--slate); line-height: 1.5; }
 .ws-tool-card .card .a { display: inline-block; margin-top: 12px; color: var(--primary); font-size: 13px; font-weight: 600; }
 
-/* 复核设置开关 */
 .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: 0 0 auto; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch span { position: absolute; inset: 0; background: #c7c7cc; border-radius: 999px; transition: .2s; }
@@ -301,7 +418,6 @@ a:hover { text-decoration: underline; }
 .switch input:checked + span { background: var(--primary); }
 .switch input:checked + span:before { transform: translateX(20px); }
 
-/* ============== 移动端适配 ============== */
 @media (max-width: 1100px) {
   .ws-grid { grid-template-columns: 1fr; }
   .ws-stats { grid-template-columns: repeat(2, 1fr); }
@@ -324,19 +440,27 @@ a:hover { text-decoration: underline; }
 
 .t-row { transition: background .12s; }
 .t-row:hover { background: rgba(0,113,227,.05); }
+:root[data-theme="dark"] .t-row:hover { background: rgba(255,255,255,.05); }
+:root[data-theme="dark"] .ws-stat .lbl { color: var(--on-dark-muted); }
+:root[data-theme="dark"] .ws-stat .sub { color: var(--muted); }
+:root[data-theme="dark"] .ws-stat .num { color: var(--ink); }
 
-/* 数据表交互增强：冻结列/长文本截断/排序筛选/键盘焦点 */
 .t-head .cell-fixed, .t-row .cell-fixed { position: sticky; background: inherit; }
 .t-row .cell-fixed { z-index: 1; }
 .t-head .cell-fixed { z-index: 4; }
 .t-row.cell-active { box-shadow: inset 3px 0 0 var(--primary); background: rgba(0,113,227,.06) !important; }
 .t-row .cell-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
-.t-head .col-sort { cursor: pointer; color: var(--steel); display: inline-flex; align-items: center; min-width: 0; }
+.t-head .col-sort { cursor: pointer; color: var(--steel); display: inline-flex; align-items: center; justify-content: center; min-width: 0; }
 .t-head .col-sort:hover, .t-head .col-sort.sorted { color: var(--primary); }
 .t-head .col-act { display: none; }
 .t-head div:hover .col-act, .t-head .col-act:hover { display: inline-flex; }
 #onlineGrid:focus { outline: none; }
 #onlineGrid:focus-visible { outline: 1px solid var(--primary); outline-offset: -1px; }
+
+#onlineGrid .t-head > div { justify-content: center; text-align: center; white-space: normal; word-break: break-all; line-height: 1.25; }
+#onlineGrid .t-row > div { text-align: center; }
+#onlineGrid .t-row > div .btn-link { white-space: nowrap; }
+
 </style>
 </head>
 <body>
@@ -382,18 +506,21 @@ a:hover { text-decoration: underline; }
 </div>
 
 <div id="app" class="app">
-  <aside class="sidebar">
+  <aside class="sidebar collapsed" id="sidebar">
+    <button class="sb-toggle" onclick="toggleSidebar()" title="展开/收起侧栏">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <div class="sb-head">
       <div class="sb-logo">理</div>
       <div class="sb-name">理反 Web</div>
     </div>
     <div class="sb-section">工作区</div>
-    <a class="nav-item" data-route="workspace"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/></svg>数据工作台</a>
-    <a class="nav-item" data-route="tools"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>修正与成果</a>
-    <a class="nav-item" data-route="build"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0l4-4m-4 4l-4-4M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>生成 MDB</a>
-    <a class="nav-item" data-route="config"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>参数中心</a>
+    <a class="nav-item" data-route="workspace"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.8"/></svg><span class="nav-text">数据工作台</span></a>
+    <a class="nav-item" data-route="tools"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18l3 3 5.7-5.7a4.5 4.5 0 0 0 6-6L14 13l-3-3 3.7-3.7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span class="nav-text">修正与成果</span></a>
+    <a class="nav-item" data-route="build"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4v11m0 0l4-4m-4 4l-4-4M4 16v2.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="nav-text">生成 MDB</span></a>
+    <a class="nav-item" data-route="config"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span class="nav-text">参数中心</span></a>
 <div class="sb-section" style="margin-top:auto;">账户</div>
-    <a class="nav-item" id="logoutBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>退出登录</a>
+    <a class="nav-item" id="logoutBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nav-text">退出登录</span></a>
   </aside>
 
   <div class="main">
@@ -461,8 +588,6 @@ async function sha256(s){
   return Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
 }
 
-
-
 function toggleTheme(){
   const root = document.documentElement;
   const dark = root.getAttribute('data-theme') !== 'dark';
@@ -476,15 +601,30 @@ function toggleTheme(){
     document.documentElement.setAttribute('data-theme', 'dark');
   }
 })();
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  sb.classList.toggle('collapsed');
+  try { localStorage.setItem('lifan_sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0'); } catch(e){}
+}
+(function(){
+  try {
+    const v = localStorage.getItem('lifan_sidebar_collapsed');
+    const sb = document.getElementById('sidebar');
+    if (sb && v === '0') sb.classList.remove('collapsed');
+  } catch(e){}
+})();
+
 function getToken(){ return localStorage.getItem('lifan_token') || ''; }
 function setToken(t){ if (t) localStorage.setItem('lifan_token', t); else localStorage.removeItem('lifan_token'); }
 const API_STATE = {
-  online: false,        // 后端 /api 可达
-  checked: false,       // 已完成健康探测
-  dbId: null,           // 在线工作库 db_id
-  dbName: '',           // 上传的原始文件名
-  dbSize: 0,            // 上传文件字节数
-  tables: null,         // {表名: 行数}（上传时快照）
+  online: false,
+  checked: false,
+  dbId: null,
+  dbName: '',
+  dbSize: 0,
+  tables: null,
 };
 
 function loadApiState(){
@@ -494,7 +634,7 @@ function loadApiState(){
       API_STATE.dbId = s.dbId; API_STATE.dbName = s.dbName || '';
       API_STATE.dbSize = s.dbSize || 0; API_STATE.tables = s.tables || null;
     }
-  } catch (e) { /* 本地缓存损坏则忽略 */ }
+  } catch (e) {  }
 }
 function saveApiState(){
   try {
@@ -502,7 +642,7 @@ function saveApiState(){
       dbId: API_STATE.dbId, dbName: API_STATE.dbName,
       dbSize: API_STATE.dbSize, tables: API_STATE.tables,
     }));
-  } catch (e) { /* 存储失败忽略 */ }
+  } catch (e) {  }
 }
 function clearApiState(){
   API_STATE.dbId = null; API_STATE.dbName = ''; API_STATE.dbSize = 0; API_STATE.tables = null;
@@ -550,7 +690,7 @@ async function apiFetch(path, options = {}){
     try {
       const j = await res.json();
       if (j && j.detail !== undefined) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
-    } catch (e) { /* 非 JSON 错误体 */ }
+    } catch (e) {  }
     if (!options.silent) showToast(msg, 'err');
     throw new ApiError(msg, res.status);
   }
@@ -568,13 +708,12 @@ function apiUpload(path, file, opts){
   return apiFetch(path, Object.assign({ method: 'POST', body: fd, timeout: 120000 }, opts || {}));
 }
 
-/* ---- 后端健康探测 / 页面顶部连接状态条 ---- */
 async function detectBackend(){
   try {
     const h = await apiFetch('/health', { timeout: 2500, silent: true });
     API_STATE.online = !!(h && h.status === 'ok');
   } catch (e) {
-    API_STATE.online = false;   // 静默降级：不弹错误
+    API_STATE.online = false;
   }
   API_STATE.checked = true;
   updateConnBar();
@@ -646,6 +785,35 @@ function showToast(msg, type='ok'){
   t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 2200);
 }
+
+
+document.addEventListener('keydown', e => {
+  const ae = document.activeElement;
+  const inEditable = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+  const k = e.key || '';
+  if ((e.metaKey || e.ctrlKey) && (k === 'k' || k === 'K')) {
+    const si = document.getElementById('onlineSearch');
+    if (si) { e.preventDefault(); si.focus(); si.select(); }
+    return;
+  }
+  if (k === 'Escape' && !inEditable) {
+    const si = document.getElementById('onlineSearch');
+    if (si && si.value && WS.zkbh) {
+      si.value = WS.zkbh;
+      OData.keyword = WS.zkbh; OData.searchCol = 'ZKBH'; OData.exact = true;
+      OData.page = 1;
+      document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.dataset.zk === WS.zkbh));
+      if (typeof loadOnlinePage === 'function') loadOnlinePage(1);
+      e.preventDefault();
+    } else if (si && si.value && !WS.zkbh) {
+      si.value = '';
+      OData.keyword = ''; OData.searchCol = '';
+      OData.page = 1;
+      if (typeof loadOnlinePage === 'function') loadOnlinePage(1);
+      e.preventDefault();
+    }
+  }
+});
 
 document.getElementById('loginForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -1095,166 +1263,7 @@ function render(name){
   if (name === 'config') return renderConfig();
   if (name === 'build') return renderBuild();
 }
-async function renderReview(){
-  const el = document.getElementById('content');
-  if (API_STATE.online && API_STATE.dbId) {
-    el.innerHTML = '<h1 class="page-title">复核工作台</h1><p class="page-sub">正在运行复核规则…</p><div style="padding:48px;text-align:center;color:var(--slate);font-size:14px;">规则引擎全库复核中…</div>';
-    let data;
-    try { data = await apiPost('/db/' + API_STATE.dbId + '/review', {}); }
-    catch (e) {
-      el.innerHTML = '<h1 class="page-title">复核工作台</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">复核失败：' + escHtml((e && e.message) || e) + '<br><a href="javascript:;" onclick="route(\'hub\')" style="color:var(--primary);">重试</a></div>';
-      return;
-    }
-    const s = data.summary || {};
-    const risky = Object.keys(data.by_hole || {}).filter(zk => data.by_hole[zk].h || data.by_hole[zk].m);
-    const rows = risky.sort().map(zk => {
-      const b = data.by_hole[zk];
-      const tags = (b.h ? '<span style="background:var(--error);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;">H·' + b.h + '</span> ' : '') +
-                   (b.m ? '<span style="background:var(--warning);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;">M·' + b.m + '</span>' : '');
-      return '<div style="padding:9px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="window.CURRENT_HOLE=\'' + escAttr(zk) + '\';route(\'borehole\')"><b style="font-size:13px;">' + escHtml(zk) + '</b><span>' + tags + '</span></div>';
-    }).join('');
-    el.innerHTML = `
-      <h1 class="page-title">复核工作台</h1>
-      <p class="page-sub">规则引擎全库复核 · 与桌面版 V3.0.4 同源算法（22+ 条规则）</p>
-      <div class="stat-row">
-        <div class="stat-card"><div class="stat-head"><span class="label">总孔数</span></div><div class="val">${s.holes || 0}</div><div class="sub">已全量复核</div></div>
-        <div class="stat-card"><div class="stat-head"><span class="label">风险钻孔</span></div><div class="val" style="color:var(--warning);">${risky.length}</div><div class="sub">需人工确认</div></div>
-        <div class="stat-card"><div class="stat-head"><span class="label">高风险 (H)</span></div><div class="val" style="color:var(--error);">${s.h || 0}</div><div class="sub">问题数</div></div>
-        <div class="stat-card"><div class="stat-head"><span class="label">问题总数</span></div><div class="val">${s.total || 0}</div><div class="sub">M:${s.m || 0} 条</div></div>
-      </div>
-      <div class="users-list" style="margin-top:8px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">问题钻孔（${risky.length}）</h3>
-        ${rows || '<div style="color:var(--success);padding:12px;">✓ 全部钻孔复核通过，无问题</div>'}
-      </div>
-      <div class="users-list" style="margin-top:8px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">核心功能</h3>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-          <div class="stat-card" style="background:var(--tint-lavender);cursor:pointer;" onclick="route('borehole')"><div class="val" style="font-size:16px;">钻孔复核</div><div class="sub">22+ 条规则引擎</div></div>
-          <div class="stat-card" style="background:var(--tint-sky);cursor:pointer;" onclick="route('spt')"><div class="val" style="font-size:16px;">批量修正标贯</div><div class="sub">SPT 杆长/击数</div></div>
-          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="runStats('soil')"><div class="val" style="font-size:16px;">土工统计</div><div class="sub">按地层分组 xlsx</div></div>
-          <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="runStats('karst_b')"><div class="val" style="font-size:16px;">岩溶统计</div><div class="sub">附表7/8 · B 类</div></div>
-          <div class="stat-card" style="background:var(--tint-peach);cursor:pointer;" onclick="route('build')"><div class="val" style="font-size:16px;">生成 MDB</div><div class="sub">GitHub Actions 回写</div></div>
-        </div>
-      </div>`;
-    return;
-  }
-
-
-  document.getElementById('content').innerHTML = `
-    <h1 class="page-title">复核工作台</h1>
-    <p class="page-sub">理正地层复核全流程 · 规则判定 · 批量修正 · 统计成果 · 成果导出</p>
-    <div class="banner-status" style="background:var(--navy);color:#fff;">
-      <div>
-        <span style="background:var(--primary);color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;">A 类 · 工民建 GB 50021 · 5 级可塑性</span>
-        <h2 style="color:#fff;font-size:22px;font-weight:700;margin:8px 0;">城市绿化通廊垃圾转运站 · 地质勘察</h2>
-        <p style="color:var(--on-dark-muted);font-size:13px;">数据库 lizheng_review.lz · 39 个钻孔 · 数据更新于 5 分钟前</p>
-      </div>
-      <button class="btn btn-primary" onclick="route('borehole')">进入复核</button>
-    </div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-head"><span class="label">总孔数</span></div><div class="val">39</div><div class="sub">已全量进入复核</div></div>
-      <div class="stat-card"><div class="stat-head"><span class="label">风险钻孔</span></div><div class="val" style="color:var(--warning);">8</div><div class="sub">需人工确认</div></div>
-      <div class="stat-card"><div class="stat-head"><span class="label">高风险 (H)</span></div><div class="val" style="color:var(--error);">3</div><div class="sub">R-DEN / R-CRS</div></div>
-      <div class="stat-card"><div class="stat-head"><span class="label">复核完成率</span></div><div class="val" style="color:var(--success);">79%</div><div class="sub">31/39 孔已确认</div></div>
-    </div>
-    <div class="users-list" style="margin-top:8px;">
-      <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">核心功能</h3>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-        <div class="stat-card" style="background:var(--tint-lavender);cursor:pointer;" onclick="route('borehole')"><div class="val" style="font-size:16px;">钻孔复核</div><div class="sub">11 项规则引擎</div></div>
-        <div class="stat-card" style="background:var(--tint-sky);cursor:pointer;" onclick="route('spt')"><div class="val" style="font-size:16px;">批量修正标贯</div><div class="sub">SPT 杆长/击数</div></div>
-        <div class="stat-card" style="background:var(--tint-mint);cursor:pointer;" onclick="showToast('承载力统计 - 即将开放','err')"><div class="val" style="font-size:16px;">统计成果</div><div class="sub">承载力 18 项 · 岩溶 20 项</div></div>
-        <div class="stat-card" style="background:var(--tint-peach);cursor:pointer;" onclick="showToast('成果导出 - 即将开放','err')"><div class="val" style="font-size:16px;">成果导出</div><div class="sub">纵断面 / 柱状图</div></div>
-      </div>
-    </div>
-  `;
-}
-async function renderBorehole(){
-  const el = document.getElementById('content');
-  if (API_STATE.online && API_STATE.dbId && window.CURRENT_HOLE) {
-    const zk = window.CURRENT_HOLE;
-    el.innerHTML = '<h1 class="page-title">钻孔复核 · ' + escHtml(zk) + '</h1><div style="padding:48px;text-align:center;color:var(--slate);">加载复核结果…</div>';
-    try {
-      const r = await apiGet(wsReviewHoleQuery(zk));
-      let strata = { columns: [], rows: [] };
-      try {
-        strata = await apiGet('/db/' + API_STATE.dbId + '/table/z_g_TuCeng?keyword=' + encodeURIComponent(zk) + '&search_col=ZKBH&page_size=50');
-      } catch (e2) {}
-      const issues = r.issues || [];
-      const isH = i => i.level === 'H';
-      const cols = strata.columns || [];
-      const pick = ['TCXH','TCYMC','TCMC','TCCDSD','TCHD','TCMSD','TCSID','TCKSX','TCYS'];
-      const shown = cols.filter(c => pick.includes(String(c).toUpperCase()));
-      const head = shown.map(c => '<div>' + escHtml(c) + '</div>').join('');
-      const bodyRows = (strata.rows || []).map(row => '<div class="t-row" style="grid-template-columns:repeat(' + shown.length + ',1fr);">' + shown.map(c => {
-        let v = row[c]; if (v === null || v === undefined) v = '';
-        return '<div>' + escHtml(String(v)) + '</div>';
-      }).join('') + '</div>').join('');
-      el.innerHTML = `
-        <h1 class="page-title">钻孔复核 · ${escHtml(zk)}</h1>
-        <p class="page-sub">规则引擎 · ${issues.length} 项问题已识别 · 与桌面版同源算法</p>
-        <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-top:12px;">
-          <div class="table-card">
-            <div class="t-head" style="grid-template-columns:repeat(${shown.length},1fr);height:36px;">${head}</div>
-            ${bodyRows || '<div style="padding:16px;color:var(--slate);">该孔无地层数据</div>'}
-          </div>
-          <div class="matrix" style="margin:0;">
-            <h3>复核问题 · ${issues.length} 项</h3>
-            ${issues.map(i => '<div class="m-row' + (isH(i) ? ' alt' : '') + '"><div><b style="color:' + (isH(i) ? 'var(--error)' : 'var(--warning)') + ';">' + escHtml(i.rule_id) + '</b> · ' + escHtml(i.message) + '</div><div class="muted small">' + escHtml(i.field || '') + '</div></div>').join('') || '<div style="color:var(--success);padding:12px;">✓ 本孔复核通过</div>'}
-            <div style="margin-top:14px;display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="route('hub')">返回工作台</button>
-              <button class="btn btn-secondary" onclick="window.CURRENT_HOLE='';route('borehole')">全部钻孔</button>
-            </div>
-          </div>
-        </div>`;
-    } catch (e) {
-      el.innerHTML = '<h1 class="page-title">钻孔复核 · ' + escHtml(zk) + '</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">加载失败：' + escHtml((e && e.message) || e) + '</div>';
-    }
-    return;
-  }
-
-
-  document.getElementById('content').innerHTML = `
-    <h1 class="page-title">钻孔复核 · ZK01-01</h1>
-    <p class="page-sub">规则引擎 · 4 项问题已识别 · GB 50021-2001 · DBJ 15-31-2016 · TB 10012-2001</p>
-    <div class="toolbar">
-      <div class="tabs">
-        <div class="tab active">钻孔复核</div>
-        <div class="tab" onclick="route('spt')">批量修正</div>
-        <div class="tab" onclick="showToast('统计成果 - 即将开放','err')">统计成果</div>
-      </div>
-      <div class="t-tools">
-        <button class="btn btn-secondary" style="color:var(--primary);border-color:var(--primary);">仅显示风险钻孔</button>
-        <button class="btn btn-secondary">撤销</button>
-        <button class="btn btn-primary">保存到数据库</button>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:220px 1fr 300px;gap:16px;">
-      <div class="users-list" style="margin:0;padding:14px;">
-        <h3 style="font-size:13px;margin-bottom:10px;">钻孔列表 <span style="float:right;background:var(--tint-rose);color:var(--error);font-size:11px;padding:2px 8px;border-radius:10px;">8 风险</span></h3>
-        ${['ZK01-01','ZK01-02','ZK01-03','ZK01-04','ZK01-05'].map((z,i) => `<div style="padding:7px 10px;background:${i===0?'var(--tint-lavender)':'transparent'};border-radius:6px;font-size:13px;color:${i===0?'var(--primary)':'var(--slate)'};font-weight:${i===0?'600':'400'};margin-bottom:4px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">${z}${i<2?'<span style="width:8px;height:8px;background:var(--error);border-radius:50%;display:inline-block;"></span>':i===4?'<span style="width:8px;height:8px;background:var(--warning);border-radius:50%;display:inline-block;"></span>':''}</div>`).join('')}
-      </div>
-      <div class="table-card">
-        <div class="t-head" style="grid-template-columns:50px 110px 1fr 140px 80px 110px;height:36px;">
-          <div>层</div><div>岩土定名</div><div>描述</div><div>密实/湿度</div><div>N63.5</div><div>承载力</div>
-        </div>
-        <div class="t-row" style="grid-template-columns:50px 110px 1fr 140px 80px 110px;"><div>1</div><div>素填土</div><div>杂色 · 松散 · 稍湿</div><div><span class="status-pill warn">松散</span> <span style="font-size:11px;color:var(--warning);">稍湿</span></div><div>5</div><div>—</div></div>
-        <div class="t-row" style="grid-template-columns:50px 110px 1fr 140px 80px 110px;"><div>2</div><div>粉质黏土</div><div>灰黄 · 可塑 · 湿</div><div><span class="status-pill ok">可塑</span> <span style="font-size:11px;color:var(--success);">湿</span></div><div>8</div><div>180</div></div>
-        <div class="t-row" style="grid-template-columns:50px 110px 1fr 140px 80px 110px;"><div>3</div><div>全风化泥岩</div><div>灰褐 · 硬塑 · 碎块</div><div>—</div><div>18</div><div>280</div></div>
-        <div class="t-row" style="grid-template-columns:50px 110px 1fr 140px 80px 110px;"><div>4</div><div>中风化泥岩</div><div>灰色 · 致密</div><div>—</div><div>35</div><div>500</div></div>
-      </div>
-      <div class="matrix" style="margin:0;">
-        <h3>复核问题 · 4 项</h3>
-        <div class="m-row alt"><div><b style="color:var(--error);">R-DEN-005</b> · 砂土缺少密实度</div><div class="muted small">层1 素填土 (GB 50021 表3.3.9)</div></div>
-        <div class="m-row"><div><b style="color:var(--error);">R-DEN-009</b> · 缺湿度</div><div class="muted small">层1 湿度需明确</div></div>
-        <div class="m-row"><div><b style="color:var(--warning);">R-CRS-001</b> · 淤泥不应标密实度</div><div class="muted small">本孔未涉及</div></div>
-        <div class="m-row"><div><b style="color:var(--warning);">WL 内插</b> · 新黄土 28 &lt; WL=30</div><div class="muted small">V3.0.3 双线性修正</div></div>
-      </div>
-    </div>
-  `;
-}
-
-let WS = { review: null, zkbh: '', table: 'z_g_TuCeng' };
-
+let WS = { review: null, zkbh: '', table: 'z_g_TuCeng', onlyIssues: false };
 
 const COLUMN_CN = {
   'ZKBH':'钻孔编号','GCSY':'工程代码','ID':'ID',
@@ -1266,6 +1275,8 @@ const COLUMN_CN = {
   'SWCH':'序号','SWSD':'地下水位深度(m)','SWLX':'水位类型','SWXZ':'地下水类型','CY':'是否参与','SWCSRQ':'测水时间',
   'QYBH':'取样编号','QYSD':'深度(m)','QYHSL':'含水率%','QYYX':'液限%','QYSY':'塑限%','QYDC':'综合定名',
   'QYZXMD':'干密度','QYZDMD':'最大干密度','QYSTXS':'初始孔隙比','QYZY010':'20~10mm','QYZY0005':'10~5mm',
+  'KLSYFF':'筛分方法','KL800':'80mm筛','KL400':'40mm筛','KL200':'20mm筛','KL60':'6mm筛','KL40':'4mm筛','KL20':'2mm筛','KL10':'1mm筛','KL5':'0.5mm筛','KL2':'0.2mm筛','KL1':'0.1mm筛',
+  'KL_5':'0.05mm筛','KL_25':'0.025mm筛','KL_1':'0.01mm筛','KL_075':'0.075mm筛','KL_074':'0.074mm筛','KL_05':'0.05mm筛','KL_01':'0.01mm筛','KL_005':'0.005mm筛','KL_002':'0.002mm筛','KL0':'<0.002mm',
   'QYZY00501':'5~2mm','QYZY0102':'2~1mm','QYZY0203':'1~0.5mm','QYZY0304':'0.5~0.25mm',
   'QYZY0405':'0.25~0.075mm','QYZY0506':'<0.075mm','QYHD':'样长(m)','QYLX':'取样类型','QYZLMD':'重度',
   'QYKJQD':'抗剪强度','QYRHQD':'抗压强度','QYZCMZL':'总出模量'
@@ -1275,9 +1286,35 @@ const WS_COLS = {
   'z_y_BiaoGuan':['BGDSD','BGGC','BGJS','BGXZJS'],
   'z_y_DongTan': ['DTDSD','DTLX','DTJS','DTXZJS'],
   'z_g_ShuiWei': ['SWCH','SWSD','SWLX','SWXZ','CY','SWCSRQ'],
-  'z_c_QuYang':  ['QYBH','QYSD','QYHSL','QYYX','QYSY','QYZXMD','QYZDMD','QYSTXS','QYZY010','QYZY0005','QYZY00501','QYZY0102','QYZY0203','QYZY0304','QYZY0405','QYZY0506','QYDC']
+  'z_c_QuYang':  ['QYBH','QYSD','QYHSL','QYYX','QYSY','QYZXMD','QYZDMD','QYSTXS','QYDC'],
+
+  'z_c_KeFen':   ['QYBH','KLSYFF','KL_5','KL_25','KL_075','KL2','KL0']
 };
 const WS_COL_WIDE = ['TCMS','TCMC','TCYMC','QYDC'];
+
+const COL_WIDTH = {
+  '#': 32,
+
+  'TCXH':44,'TCZCBH':54,'TCYCBH':46,'TCYMC':64,'TCMC':64,'TCCDSD':46,'TCYS':38,
+  'TCMSD':42,'TCSID':38,'TCKSX':42,'TCFHCD':42,'TCHD':38,'TCMS':156,
+
+  'QYBH':48,'QYSD':42,'QYHSL':40,'QYYX':40,'QYSY':40,'QYZXMD':46,'QYZDMD':50,'QYSTXS':46,'QYDC':150,
+
+  'QYZY010':44,'QYZY0005':44,'QYZY00501':44,'QYZY0102':44,'QYZY0203':44,'QYZY0304':44,'QYZY0405':44,'QYZY0506':48,
+
+  'KLSYFF':66,'KL800':58,'KL400':58,'KL200':58,'KL60':58,'KL40':58,'KL20':58,'KL10':58,'KL5':58,'KL2':58,'KL1':58,
+  'KL_5':58,'KL_25':58,'KL_1':58,'KL_075':58,'KL_074':58,'KL_05':58,'KL_01':58,'KL_005':58,'KL_002':58,'KL0':58,
+
+  'BGDSD':48,'BGGC':48,'BGJS':48,'BGXZJS':58,
+
+  'DTDSD':48,'DTLX':60,'DTJS':48,'DTXZJS':58,
+
+  'SWCH':40,'SWSD':80,'SWLX':70,'SWXZ':80,'CY':80,'SWCSRQ':86,
+};
+const COL_OP_W = 46;
+
+function wsRealTable(t){ return typeof t === 'string' && t.indexOf('__') > 0 ? t.split('__')[0] : t; }
+const WS_TAB_CN = { 'z_c_KeFen': '颗分试验' };
 function fmtNum(v){
   if (v === null || v === undefined || v === '') return '';
   if (typeof v === 'number') {
@@ -1297,7 +1334,6 @@ function fmtNum(v){
   }
   return String(v);
 }
-
 
 let WS_SETTINGS = Object.assign(
   { project_type: 'B', max_plasticity: '硬塑', include_test: false, use_std_stratum: false },
@@ -1383,22 +1419,28 @@ function wsReviewHoleQuery(zk){
 }
 
 function openColSettings(){
-  const all = (OData.columns || []).filter(c => c !== 'id');
+
+  const defs = WS_COLS[OData.table] || [];
+  let all = (OData.columns || []).filter(c => c !== 'id' && c !== 'updated_at' && c !== 'created_at' && !c.endsWith('_'));
+  if (defs.length) all = all.filter(c => defs.includes(c));
   if (!all.length) { showToast('当前表无列', 'err'); return; }
   const hidden = OData.hiddenCols[OData.table] || {};
   const html = '<div style="padding:16px 20px;max-height:60vh;overflow-y:auto;">' +
-    '<div style="font-size:13px;color:var(--slate);margin-bottom:10px;">选择 ' + escHtml(OData.table) + ' 显示的列</div>' +
+    '<div style="font-size:13px;color:var(--slate);margin-bottom:10px;">选择 ' + escHtml(WS_TAB_CN[OData.table] || COLUMN_CN[wsRealTable(OData.table)] || OData.table) + ' 显示的列</div>' +
+    '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;cursor:pointer;border-bottom:1px dashed var(--hairline);margin-bottom:6px;"><input type="checkbox" id="freezeCols"' + (OData.freeze ? ' checked' : '') + '> <b>冻结前两列</b> <span style="color:var(--muted);font-weight:400;">（滚动时保持可见，默认关闭）</span></label>' +
     all.map(c => '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" class="colchk" value="' + escAttr(c) + '"' + (!hidden[c] ? ' checked' : '') + '> ' + escHtml(COLUMN_CN[c] || c) + '</label>').join('') +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--hairline);">' +
     '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
     '<button class="btn btn-primary" onclick="applyColSettings()">应用</button></div>';
-  openModal('列设置 · ' + (COLUMN_CN[OData.table] || OData.table), html);
+  openModal('列设置 · ' + (WS_TAB_CN[OData.table] || COLUMN_CN[wsRealTable(OData.table)] || OData.table), html);
 }
 function applyColSettings(){
   const hidden = {};
   document.querySelectorAll('.colchk').forEach(el => { if (!el.checked) hidden[el.value] = true; });
   OData.hiddenCols[OData.table] = hidden;
+  const fc = document.getElementById('freezeCols');
+  OData.freeze = !!(fc && fc.checked);
   closeModal();
   loadOnlinePage(OData.page);
 }
@@ -1429,24 +1471,25 @@ async function renderWorkspace(){
       <div style="display:flex;gap:10px;">
         <button class="btn btn-secondary" onclick="wsOpenSettings()">⚙ 复核设置</button>
         <button class="btn btn-secondary" onclick="renderWorkspace()">重新复核</button>
-        <button class="btn btn-secondary" onclick="location.hash='#mdb';route('workspace')">切换库</button>
+        <button class="btn btn-secondary" onclick="clearApiState();location.hash='#workspace';renderWorkspace();">切换库</button>
       </div>
     </div>
     <div class="ws-stats">
-      <div class="ws-stat"><div class="lbl">总孔数</div><div class="num" id="wsS0">—</div><div class="sub">已全量复核</div></div>
-      <div class="ws-stat"><div class="lbl">风险钻孔</div><div class="num" id="wsS1" style="color:var(--warning);">—</div><div class="sub">需人工确认</div></div>
-      <div class="ws-stat"><div class="lbl">高风险问题</div><div class="num" id="wsS2" style="color:var(--error);">—</div><div class="sub">H 级</div></div>
-      <div class="ws-stat"><div class="lbl">问题总数</div><div class="num" id="wsS3">—</div><div class="sub">含 M 级</div></div>
+      <div class="ws-stat" data-tone="ok" onclick="wsKpiJump('all')" title="显示全部钻孔" style="cursor:pointer;"><div class="lbl">总孔数</div><div class="num" id="wsS0">—</div><div class="sub">已全量复核 · 点击查看全部</div></div>
+      <div class="ws-stat" data-tone="warn" onclick="wsKpiJump('risk')" title="仅显示问题钻孔并跳转第一个风险孔" style="cursor:pointer;"><div class="lbl">风险钻孔</div><div class="num" id="wsS1" style="color:var(--warning);">—</div><div class="sub" id="wsS1Sub">需人工确认 · 点击跳转</div></div>
+      <div class="ws-stat" onclick="wsKpiJump('issues')" title="仅显示问题钻孔并跳转第一个问题孔" style="cursor:pointer;"><div class="lbl">问题总数</div><div class="num" id="wsS3">—</div><div class="sub" id="wsS3Sub">含 H/M 级 · 点击跳转</div></div>
     </div>
     <div class="ws-grid">
       <div class="ws-panel">
-        <div class="p-head">钻孔列表 <span id="wsHoleCount" style="color:var(--muted);font-weight:400;"></span></div>
+        <div class="p-head">钻孔列表
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);font-weight:400;cursor:pointer;"><input type="checkbox" id="wsOnlyIssues" onchange="wsToggleOnlyIssues()">仅问题孔</label>
+          <span id="wsHoleCount" style="color:var(--muted);font-weight:400;"></span>
+        </div>
         <div id="wsHoles" style="max-height:calc(100vh - 320px);overflow-y:auto;"></div>
       </div>
       <div class="ws-panel">
         <div id="wsTabs" style="display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--hairline);"></div>
         <div class="ws-toolbar">
-          <div class="search-in" style="flex:1;max-width:280px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6.5" stroke="#8e8e93" stroke-width="1.8"/><path d="M16 16l4.5 4.5" stroke="#8e8e93" stroke-width="1.8" stroke-linecap="round"/></svg><input placeholder="搜索当前表…" id="onlineSearch"></div>
           <button class="btn btn-secondary" style="padding:6px 14px;font-size:12.5px;" onclick="loadOnlinePage(1)">刷新</button>
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" onclick="openColSettings()">列设置</button>
           <span style="font-size:11.5px;color:var(--muted);" id="wsCurTable"></span>
@@ -1491,68 +1534,173 @@ async function wsLoadReview(){
     const data = await apiPost(wsReviewQuery(), {});
     WS.review = data;
     const s = data.summary || {};
-    const holes = document.getElementById('wsS0'), risk = document.getElementById('wsS1'),
-          h = document.getElementById('wsS2'), total = document.getElementById('wsS3');
-    if (holes) holes.textContent = s.holes || 0;
-    if (risk) risk.textContent = Object.keys(data.by_hole || {}).filter(k => data.by_hole[k].h || data.by_hole[k].m).length;
-    if (h) h.textContent = s.h || 0;
-    if (total) total.textContent = s.total || 0;
-    const cnt = document.getElementById('wsHoleCount');
-    if (cnt) cnt.textContent = (s.holes || 0) + ' 孔';
-    // 钻孔列表：问题孔优先
     const by = data.by_hole || {};
-    const risky = Object.keys(by).filter(k => by[k].h || by[k].m).sort();
-    const clean = Object.keys(by).filter(k => !(by[k].h || by[k].m)).sort();
-    const box = document.getElementById('wsHoles');
-    if (box) {
-      box.innerHTML = risky.map(zk => wsHoleItem(zk, by[zk])).join('')
-        + (clean.length ? '<div style="padding:8px 14px;font-size:11px;color:var(--muted);font-weight:600;">通过 · ' + clean.length + ' 孔</div>' : '')
-        + clean.slice(0, 40).map(zk => wsHoleItem(zk, by[zk])).join('')
-        + (clean.length > 40 ? '<div style="padding:8px 14px;font-size:11px;color:var(--muted);">…共 ' + clean.length + ' 孔</div>' : '');
-      // 默认选中第一个问题孔
-      const first = risky[0] || clean[0];
-      if (first) wsSelectHole(first);
-    }
+    const holes = document.getElementById('wsS0'), risk = document.getElementById('wsS1'),
+          total = document.getElementById('wsS3');
+    if (holes) holes.textContent = s.holes || 0;
+    if (risk) risk.textContent = Object.keys(by).filter(k => by[k].h || by[k].m).length;
+    if (total) total.textContent = s.total || 0;
+    const riskSub = document.getElementById('wsS1Sub');
+    if (riskSub) riskSub.textContent = 'H 级孔 ' + Object.keys(by).filter(k => by[k].h).length +
+      ' · M 级孔 ' + Object.keys(by).filter(k => by[k].m).length + ' · 点击跳转';
+    const totalSub = document.getElementById('wsS3Sub');
+    if (totalSub) totalSub.textContent = 'H 级 ' + (s.h || 0) + ' · M 级 ' + (s.m || 0) + ' · 点击跳转';
+
+    wsRenderHoles();
+    const first = Object.keys(by).sort((a, b) => String(a).localeCompare(String(b), 'zh-Hans-CN', { numeric: true }))[0];
+    if (first) wsSelectHole(first);
     await wsInitTables();
   } catch (e) {
     showToast('复核失败：' + ((e && e.message) || e), 'err');
   }
 }
 
+function wsRenderHoles(){
+  const by = (WS.review && WS.review.by_hole) || {};
+  const natSort = (a, b) => String(a).localeCompare(String(b), 'zh-Hans-CN', { numeric: true });
+  let list = Object.keys(by).sort(natSort);
+  if (WS.onlyIssues) list = list.filter(k => by[k].h || by[k].m);
+  const box = document.getElementById('wsHoles');
+  const cnt = document.getElementById('wsHoleCount');
+  if (cnt) cnt.textContent = list.length + ' 孔' + (WS.onlyIssues ? '（问题）' : '');
+  if (box) {
+    box.innerHTML = list.map(zk => wsHoleItem(zk, by[zk])).join('')
+      || '<div style="padding:20px;color:var(--muted);font-size:12.5px;text-align:center;">无问题钻孔</div>';
+  }
+}
+
+function wsToggleOnlyIssues(){
+  const cb = document.getElementById('wsOnlyIssues');
+  WS.onlyIssues = !!(cb && cb.checked);
+  wsRenderHoles();
+}
+
+function wsKpiJump(kind){
+  const by = (WS.review && WS.review.by_hole) || {};
+  const natSort = (a, b) => String(a).localeCompare(String(b), 'zh-Hans-CN', { numeric: true });
+  const all = Object.keys(by).sort(natSort);
+  const risky = all.filter(k => by[k].h || by[k].m);
+  const hOnly = all.filter(k => by[k].h);
+  let target = null, onlyIssues = false;
+  if (kind === 'all') { onlyIssues = false; target = all[0] || null; }
+  else if (kind === 'h') { onlyIssues = true; target = hOnly[0] || risky[0] || null; }
+  else { onlyIssues = true; target = risky[0] || null; }
+  WS.onlyIssues = onlyIssues;
+  const cb = document.getElementById('wsOnlyIssues');
+  if (cb) cb.checked = onlyIssues;
+  wsRenderHoles();
+  if (target) {
+    try {
+      const el = document.querySelector('.ws-hole[data-zk="' + CSS.escape(target) + '"]');
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.click(); }
+      else wsSelectHole(target);
+    } catch (e) { wsSelectHole(target); }
+  }
+}
+
 function wsHoleItem(zk, info){
   const tags = (info.h ? '<span class="ws-badge h">H·' + info.h + '</span>' : '') +
                (info.m ? '<span class="ws-badge m">M·' + info.m + '</span>' : '');
-  return '<div class="ws-hole' + (zk === WS.zkbh ? ' active' : '') + '" onclick="wsSelectHole(\'' + escAttr(zk) + '\')">' +
+  const tip = '高风险 ' + (info.h || 0) + ' · 中风险 ' + (info.m || 0) + ' · 点击查看详情';
+  const riskCls = info.h ? ' risk-h' : (info.m ? ' risk-m' : '');
+  return '<div class="ws-hole' + (zk === WS.zkbh ? ' active' : '') + riskCls + '" data-zk="' + escAttr(zk) + '" onclick="wsSelectHole(\'' + escAttr(zk) + '\')" title="' + escAttr(tip) + '">' +
          '<span>' + escHtml(zk) + '</span><span>' + tags + '</span></div>';
 }
 
 async function wsSelectHole(zk){
   WS.zkbh = zk;
-  document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.textContent.includes(zk)));
-  // 右栏问题面板
+  document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.dataset.zk === zk));
+
   const box = document.getElementById('wsIssues');
   const cnt = document.getElementById('wsIssueCount');
   if (box) box.innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px;">加载 ' + escHtml(zk) + ' 复核结果…</div>';
   try {
-    const r = await apiGet('/db/' + API_STATE.dbId + '/review/' + encodeURIComponent(zk));
+    const r = await apiGet(wsReviewHoleQuery(zk));
     const issues = r.issues || [];
     if (cnt) cnt.textContent = issues.length + ' 项';
     if (box) {
-      box.innerHTML = issues.map(i =>
-        '<div class="ws-issue"><div><span class="rid" style="color:' + (i.level === 'H' ? 'var(--error)' : 'var(--warning)') + ';">' + escHtml(i.rule_id) + '</span>' +
+      box.innerHTML = issues.map(i => {
+
+        const rtab = RULE_TAB[i.rule_id] || 'z_g_TuCeng';
+        const rv = (i.ref_value === undefined || i.ref_value === null || i.ref_value === '' || i.ref_value === 0) ? '' : i.ref_value;
+        return '<div class="ws-issue issue-' + (i.level === 'H' ? 'h' : 'm') + '" data-idx="' + (i.layer_index === undefined || i.layer_index === null ? -1 : i.layer_index) + '" data-tab="' + rtab + '" data-refv="' + escAttr(String(rv)) + '" onclick="jumpToIssue(this)" title="点击定位到对应数据行"><div><span class="rid" style="color:' + (i.level === 'H' ? 'var(--error)' : 'var(--warning)') + ';">' + escHtml(i.rule_id) + '</span>' +
         '<span class="msg">' + escHtml(i.message) + '</span></div>' +
-        (i.field ? '<div class="fld">' + escHtml(i.field) + '</div>' : '') + '</div>').join('')
+        (i.field ? '<div class="fld">' + escHtml(i.field) + '</div>' : '') + '</div>';
+      }).join('')
         || '<div style="padding:20px;color:var(--success);font-size:13px;">✓ 本孔复核通过</div>';
     }
   } catch (e) {
     if (box) box.innerHTML = '<div style="padding:20px;color:var(--error);font-size:13px;">加载失败：' + escHtml((e && e.message) || e) + '</div>';
   }
-  // 中栏切到地层页签并搜索该孔
+
   if (!API_STATE.tables) await wsInitTables();
   wsSetTab('z_g_TuCeng');
-  const si = document.getElementById('onlineSearch');
-  if (si) { si.value = zk; OData.keyword = zk; OData.searchCol = 'ZKBH'; OData.page = 1; OData.exact = true; }
-  await loadOnlinePage(1);
+}
+
+const RULE_TAB = {
+  'R-DEN-001': 'z_y_BiaoGuan', 'R-DEN-007': 'z_y_BiaoGuan', 'R-DEN-008': 'z_y_BiaoGuan',
+  'R-CRS-012': 'z_y_BiaoGuan', 'R-SPT-001': 'z_y_BiaoGuan',
+  'R-DEN-002': 'z_y_DongTan',
+  'R-PLS-001': 'z_c_QuYang', 'R-PLS-002': 'z_c_QuYang',
+  'R-CRS-002': 'z_c_QuYang', 'R-CRS-003': 'z_c_QuYang', 'R-GRS-001': 'z_c_QuYang',
+};
+
+async function jumpToIssue(card){
+  if (!card) return;
+  const idx = parseInt(card.dataset.idx || '-1', 10);
+  const tab = card.dataset.tab || 'z_g_TuCeng';
+  const refv = (card.dataset.refv || '').trim();
+
+  if (WS.zkbh) {
+    const si = document.getElementById('onlineSearch');
+    if (si && si.value !== WS.zkbh) {
+      si.value = WS.zkbh; OData.keyword = WS.zkbh; OData.searchCol = 'ZKBH';
+      OData.exact = true; OData.page = 1;
+    }
+  }
+
+  if (OData.table !== tab) wsSetTab(tab);
+  await loadOnlinePage(OData.page);
+
+  const matchCol = { 'z_y_BiaoGuan':'BGDSD', 'z_y_DongTan':'DTDSD', 'z_c_QuYang':'QYBH', 'z_c_KeFen':'QYBH' }[tab] || '';
+  const cols = WS_COLS[OData.table] || [];
+  const t0 = Date.now();
+  let row = null;
+  while (Date.now() - t0 < 2500) {
+    const rows = document.querySelectorAll('#onlineGrid .t-row');
+    if (!rows.length) { await new Promise(r => setTimeout(r, 120)); continue; }
+    if (tab === 'z_g_TuCeng' && idx >= 0 && rows.length > idx) { row = rows[idx]; break; }
+    if (matchCol && refv !== '') {
+      const ci = cols.indexOf(matchCol);
+      if (ci >= 0) {
+        const isNum = (matchCol !== 'QYBH');
+        for (let i = 0; i < rows.length; i++) {
+          const cell = rows[i].children[ci + 1];
+          if (!cell) continue;
+          const v = cell.textContent.trim();
+          if (isNum) {
+            const a = parseFloat(v), b = parseFloat(refv);
+            if (!isNaN(a) && !isNaN(b) && Math.abs(a - b) < 0.011) { row = rows[i]; break; }
+          } else if (v === refv) { row = rows[i]; break; }
+        }
+        if (row) break;
+      }
+    }
+    await new Promise(r => setTimeout(r, 120));
+  }
+
+  if (!row) { showToast('问题行暂未显示，请检查筛选或分页', 'info'); return; }
+
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  row.classList.remove('flash', 'flash-flat');
+  void row.offsetWidth;
+  row.classList.add('flash');
+  setTimeout(() => {
+    row.classList.remove('flash');
+    row.classList.add('flash-flat');
+    setTimeout(() => row.classList.remove('flash-flat'), 900);
+  }, 2400);
 }
 
 let WS_TABS_DONE = false;
@@ -1567,23 +1715,39 @@ async function wsInitTables(){
   }
   const names = Object.keys(API_STATE.tables);
   if (!names.length) return;
-  if (!OData.table || !names.includes(OData.table)) OData.table = names[0];
+
+  if (OData.hiddenCols['z_g_TuCeng'] === undefined) {
+    OData.hiddenCols['z_g_TuCeng'] = { TCHD: true };
+  }
+  if (!OData.table || !names.includes(wsRealTable(OData.table))) OData.table = names[0];
   const cur = document.getElementById('wsCurTable');
-  if (cur) cur.textContent = '当前表：' + (COLUMN_CN[OData.table] || OData.table);
+  if (cur) cur.textContent = '当前表：' + (WS_TAB_CN[OData.table] || COLUMN_CN[wsRealTable(OData.table)] || OData.table);
   const tabs = document.getElementById('wsTabs');
   if (tabs) {
-    const defs = [['z_g_TuCeng','地层'],['z_c_QuYang','土工试验'],['z_y_DongTan','动探'],['z_y_BiaoGuan','标贯'],['z_g_ShuiWei','水位']];
-    tabs.innerHTML = defs.filter(d => names.includes(d[0])).map(d =>
-      '<div data-t="' + d[0] + '" onclick="wsSetTab(\'' + d[0] + '\')" style="padding:7px 14px;font-size:12.5px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:var(--steel);border-bottom:2px solid transparent;">' + d[1] + '</div>').join('');
+    const defs = [['z_g_TuCeng','地层'],['z_c_QuYang','土工试验'],['z_c_KeFen','颗分试验'],['z_y_DongTan','动探'],['z_y_BiaoGuan','标贯'],['z_g_ShuiWei','水位']];
+    tabs.className = 'seg-tabs';
+    tabs.innerHTML = defs.filter(d => names.includes(wsRealTable(d[0]))).map(d =>
+      '<div class="seg" data-t="' + d[0] + '" onclick="wsSetTab(\'' + d[0] + '\')">' + d[1] + '</div>').join('');
     wsMarkTab();
   }
-  // 手动搜索（回车）→ 取消精确匹配
+
   const si = document.getElementById('onlineSearch');
   if (si && !si.dataset.bound) {
     si.dataset.bound = '1';
     si.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
-        OData.keyword = si.value.trim(); OData.exact = false; OData.page = 1; loadOnlinePage(1);
+        const kw = si.value.trim();
+        if (kw) {
+          document.querySelectorAll('.ws-hole').forEach(el => el.classList.remove('active'));
+          OData.keyword = kw; OData.searchCol = ''; OData.exact = false; OData.page = 1;
+        } else if (WS.zkbh) {
+          si.value = WS.zkbh;
+          OData.keyword = WS.zkbh; OData.searchCol = 'ZKBH'; OData.exact = true; OData.page = 1;
+          document.querySelectorAll('.ws-hole').forEach(el => el.classList.toggle('active', el.dataset.zk === WS.zkbh));
+        } else {
+          OData.keyword = ''; OData.searchCol = ''; OData.exact = false; OData.page = 1;
+        }
+        loadOnlinePage(1);
       }
     });
   }
@@ -1591,20 +1755,24 @@ async function wsInitTables(){
 function wsMarkTab(){
   const tabs = document.getElementById('wsTabs');
   if (!tabs) return;
-  tabs.querySelectorAll('[data-t]').forEach(el => {
-    const on = el.dataset.t === OData.table;
-    el.style.color = on ? 'var(--primary)' : 'var(--steel)';
-    el.style.borderBottomColor = on ? 'var(--primary)' : 'transparent';
-    el.style.background = on ? 'var(--surface-soft)' : 'transparent';
+  tabs.querySelectorAll('.seg').forEach(el => {
+    el.classList.toggle('on', el.dataset.t === OData.table);
   });
 }
 function wsSetTab(tbl){
-  OData.table = tbl; OData.page = 1; OData.keyword = ''; OData.searchCol = ''; OData.exact = false;
+  OData.table = tbl; OData.page = 1;
   OData.orderBy = ''; OData.orderDir = ''; OData.activeRow = -1;
   const si = document.getElementById('onlineSearch');
-  if (si) { si.value = ''; }
+
+  if (WS.zkbh) {
+    OData.keyword = WS.zkbh; OData.searchCol = 'ZKBH'; OData.exact = true;
+    if (si) si.value = WS.zkbh;
+  } else {
+    OData.keyword = ''; OData.searchCol = ''; OData.exact = false;
+    if (si) si.value = '';
+  }
   const cur = document.getElementById('wsCurTable');
-  if (cur) cur.textContent = '当前表：' + (COLUMN_CN[tbl] || tbl);
+  if (cur) cur.textContent = '当前表：' + (WS_TAB_CN[tbl] || COLUMN_CN[wsRealTable(tbl)] || tbl) + (WS.zkbh ? ' · 单孔 ' + WS.zkbh : '');
   wsMarkTab();
   loadOnlinePage(1);
 }
@@ -1614,6 +1782,7 @@ async function renderTools(){
     el.innerHTML = '<h1 class="page-title">修正与成果</h1><p class="page-sub">请先在上传数据库（数据工作台）后使用。</p>';
     return;
   }
+  const pt = (WS_SETTINGS && WS_SETTINGS.project_type) || 'B';
   el.innerHTML = `
     <div class="ws-head">
       <div>
@@ -1637,14 +1806,9 @@ async function renderTools(){
         <div class="d">按地层分组的土工试验统计表（xlsx 下载）</div>
         <span class="a">生成统计 →</span>
       </div>
-      <div class="card" onclick="runStats('karst_b')">
-        <div class="t">岩溶统计（B 类）</div>
-        <div class="d">附表7 岩溶率统计表 + 附表8 溶洞统计表</div>
-        <span class="a">生成统计 →</span>
-      </div>
-      <div class="card" onclick="runStats('karst_a')">
-        <div class="t">岩溶统计（A 类）</div>
-        <div class="d">A 类工程岩溶率/溶洞统计（xlsx）</div>
+      <div class="card" onclick="runStats(${JSON.stringify(pt === 'A' ? 'karst_a' : 'karst_b')})">
+        <div class="t">${pt === 'A' ? '岩溶统计（A 类）' : '岩溶统计（B 类）'}</div>
+        <div class="d">${pt === 'A' ? 'A 类工程岩溶率/溶洞统计（xlsx）' : '附表7 岩溶率统计表 + 附表8 溶洞统计表'}</div>
         <span class="a">生成统计 →</span>
       </div>
       <div class="card" onclick="toolsDxf('profile')">
@@ -1677,7 +1841,7 @@ async function toolsSpt(){
   box.innerHTML = '<div style="padding:24px;color:var(--steel);">扫描修正建议…</div>';
   try {
     const data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {});
-    // 展平：外层组 → 内层 SptSuggestion 列表
+
     const flat = [];
     (data.suggestions || []).forEach(g => {
       (g.suggestions || []).forEach(s => {
@@ -1693,7 +1857,12 @@ async function toolsSpt(){
           ${flat.length ? '<button class="btn btn-primary" style="padding:4px 14px;height:30px;font-size:12px;" onclick="toolsSptApply()">一键应用全部</button>' : ''}
         </div>
         <div style="max-height:420px;overflow-y:auto;">
-          ${flat.map(s => '<div class="ws-issue" data-zk="' + escAttr(s.zkbh) + '" data-dsd="' + s.bgdsd + '" data-n="' + s.new_n + '"><div><b style="color:var(--primary);">' + escHtml(s.zkbh) + '</b> · 深度 ' + s.bgdsd + 'm · ' + escHtml(s.old_n) + ' → <b>' + escHtml(s.new_n) + '</b></div><div class="fld">' + escHtml(s.ref) + '</div></div>').join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
+          ${flat.map(s => {
+            const nTxt = s.new_n === s.old_n
+              ? '击数 N=' + escHtml(s.old_n) + ' <span style="color:var(--success);font-weight:600;">（无需修正）</span>'
+              : '原始击数 <span style="color:var(--muted);">' + escHtml(s.old_n) + '</span> → 修改后击数 <b class="spt-n" ondblclick="sptEditN(this)">' + escHtml(s.new_n) + '</b> <span style="color:var(--muted);font-size:11px;">(双击可改)</span>';
+            return '<div class="ws-issue" data-zk="' + escAttr(s.zkbh) + '" data-dsd="' + fmtNum(s.bgdsd) + '" data-n="' + s.new_n + '"><div><b style="color:var(--primary);">' + escHtml(s.zkbh) + '</b> · 深度 ' + fmtNum(s.bgdsd) + 'm · ' + nTxt + '</div><div class="fld">' + escHtml(s.ref) + '</div></div>';
+          }).join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
         </div>
       </div>`;
   } catch (e) { box.innerHTML = '<div style="padding:20px;color:var(--error);">扫描失败：' + escHtml((e && e.message) || e) + '</div>'; }
@@ -1709,6 +1878,30 @@ async function toolsSptApply(){
     showToast('已应用 ' + (r.updated || 0) + ' / ' + items.length + ' 条', r.updated ? 'info' : 'err');
     toolsSpt();
   } catch (e) { showToast('应用失败：' + ((e && e.message) || e), 'err'); }
+}
+
+function sptEditN(el){
+  if (!el || el.dataset.editing) return;
+  const old = el.textContent.trim();
+  el.dataset.editing = '1';
+  const inp = document.createElement('input');
+  inp.type = 'number'; inp.value = old; inp.min = '1'; inp.step = '1';
+  inp.style.cssText = 'width:56px;height:26px;border:1px solid var(--primary);border-radius:6px;text-align:center;font-size:12.5px;color:var(--primary);font-weight:700;background:var(--canvas);';
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus(); inp.select();
+  const finish = (save) => {
+    el.dataset.editing = '';
+    const v = inp.value.trim();
+    if (!save || v === '' || isNaN(parseInt(v, 10))) { el.textContent = old; return; }
+    const n = parseInt(v, 10);
+    el.textContent = String(n);
+    const issue = el.closest('[data-zk]');
+    if (issue) issue.dataset.n = String(n);
+    showToast('修改后击数已更新为 ' + n + '（点「一键应用全部」写回）', 'info');
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+  inp.addEventListener('blur', () => finish(true));
 }
 
 async function toolsDxf(kind){
@@ -1771,7 +1964,12 @@ async function renderConfig(){
     }
     const st = g.structured;
     const secs = Object.keys(st).map(sec => {
-      return '<div class="ws-panel" style="margin-bottom:14px;"><div class="p-head">' + escHtml(sec) + '</div><div style="padding:6px 16px 14px;">' + renderCfgSection(sec, st[sec], sec) + '</div></div>';
+      const cnt = countCfgFields(st[sec]);
+      return '<div class="ws-panel cfg-panel">' +
+        '<div class="p-head">' + escHtml(sec) + '<span class="cnt">' + cnt + ' 项</span></div>' +
+        '<div class="cfg-body">' +
+        renderCfgSection(sec, st[sec], sec) +
+        '</div></div>';
     }).join('');
     el.innerHTML = `
       <div class="ws-head">
@@ -1784,7 +1982,9 @@ async function renderConfig(){
           <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
         </div>
       </div>
-      ${secs}
+      <div class="cfg-grid">
+        ${secs}
+      </div>
       <div id="cfgStatus" style="font-size:13px;color:var(--slate);margin-top:6px;"></div>`;
   } catch (e) {
     el.innerHTML = '<h1 class="page-title">参数中心</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">读取失败：' + escHtml((e && e.message) || e) + '</div>';
@@ -1800,24 +2000,24 @@ function isStateMap(obj){
   return rangeKeys.length >= 2;
 }
 function renderStateMap(key, obj){
-  // 反转展示：状态词为行标签，区间为输入值（data-path 仍用原始区间键，保存逻辑不变）
+
   const rows = Object.entries(obj).filter(([k]) => k !== '用途');
   const order = {};
   STATE_ORDER.forEach((s, i) => order[s] = i);
   rows.sort((a, b) => (order[a[1]] ?? 99) - (order[b[1]] ?? 99) || String(a[0]).localeCompare(String(b[0]), 'zh'));
   const grid = rows.map(([k, v]) =>
-    '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f2;">' +
-    '<span style="flex:0 0 110px;font-size:13px;font-weight:600;color:var(--charcoal);">' + escHtml(v) + '</span>' +
-    '<input data-path="' + escAttr(key + '.' + k) + '" data-type="str" data-state="' + escAttr(v) + '" value="' + escAttr(k) + '" style="flex:1;max-width:220px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">' +
+    '<div class="cfg-state-row"><span class="st" title="' + escAttr(v) + '">' + escHtml(v) + '</span>' +
+    '<input data-path="' + escAttr(key + '.' + k) + '" data-type="str" data-state="' + escAttr(v) + '" value="' + escAttr(k) + '" style="width:100%;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;box-sizing:border-box;">' +
     '</div>').join('');
-  return '<div style="margin:6px 0 2px;font-size:12px;font-weight:700;color:var(--steel);">由状态定义数据（状态 → 数据区间）</div>' + grid;
+  return '<div class="cfg-state-table">' + grid + '</div>';
 }
 function renderCfgSection(sec, obj, prefix){
   if (Array.isArray(obj) && obj.length && typeof obj[0] === 'object') {
     const base = prefix || sec;
     return obj.map((item, i) =>
-      '<div style="background:var(--surface-soft);border-radius:10px;padding:4px 12px 8px;margin:6px 0;">' +
-      Object.keys(item).map(sk => cfgRow(base + '_i' + i + '_' + sk, item[sk], true)).join('') + '</div>').join('');
+      '<div style="grid-column:1/-1;background:var(--canvas);border:1px solid var(--hairline);border-radius:10px;padding:8px 12px;margin:4px 0;">' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">' +
+      Object.keys(item).map(sk => cfgRow(base + '_i' + i + '_' + sk, item[sk], true)).join('') + '</div></div>').join('');
   }
   if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
     return cfgRow(prefix || sec, obj);
@@ -1827,12 +2027,21 @@ function renderCfgSection(sec, obj, prefix){
     const key = prefix ? prefix + '.' + k : k;
     if (v && typeof v === 'object' && !Array.isArray(v)) {
       if (isStateMap(v)) {
-        return '<div style="margin:10px 0 4px;font-size:12.5px;font-weight:700;color:var(--charcoal);">' + escHtml(k) + '</div>' + renderStateMap(key, v);
+        return '<div class="cfg-sub">' + escHtml(k) + '</div>' + renderStateMap(key, v);
       }
-      return '<div style="margin:8px 0 2px;font-size:12px;font-weight:700;color:var(--steel);">' + escHtml(k) + '</div>' + renderCfgSection(sec, v, key);
+      return '<div class="cfg-sub">' + escHtml(k) + '</div>' + renderCfgSection(sec, v, key);
     }
     return cfgRow(key, v);
   }).join('');
+}
+
+function countCfgFields(obj){
+  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) return 1;
+  return Object.keys(obj).reduce((n, k) => {
+    const v = obj[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) return n + countCfgFields(v);
+    return n + 1;
+  }, 0);
 }
 function cfgRow(key, v, ro){
   let control, dtype = 'str';
@@ -1854,7 +2063,18 @@ function cfgRow(key, v, ro){
       control = '<input data-path="' + escAttr(key) + '" data-type="str" value="' + escAttr(s) + '"' + disabled + ' style="flex:1;min-width:180px;height:32px;border:1px solid var(--hairline-strong);border-radius:8px;padding:0 10px;font-size:12.5px;">';
     }
   }
-  return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f2;"><span style="flex:0 0 220px;font-size:12.5px;color:var(--charcoal);" title="' + escAttr(key) + '">' + escHtml(key.split('.').pop()) + (ro ? ' <span style="color:var(--muted);font-size:11px;">(只读)</span>' : '') + '</span>' + control + '</div>';
+
+  const label = key.split('.').pop();
+  const isNote = label === '用途' || label.endsWith('说明') || label === '用途说明';
+  if (isNote) {
+    return '<div class="cfg-note"><div class="cfg-label">' + escHtml(label) + '</div>' +
+      (typeof v === 'string' && v.length > 40
+        ? '<textarea data-path="' + escAttr(key) + '" data-type="str" disabled rows="2" style="width:100%;box-sizing:border-box;border:1px solid var(--hairline-strong);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5;font-family:inherit;resize:none;background:var(--surface);color:var(--steel);">' + escHtml(v) + '</textarea>'
+        : '<div style="font-size:12px;color:var(--steel);line-height:1.5;">' + escHtml(String(v)) + '</div>') + '</div>';
+  }
+
+  const isWide = control.indexOf('textarea') >= 0;
+  return '<div class="cfg-card' + (isWide ? ' col' : '') + (ro ? ' ro' : '') + '"><span class="cfg-label" title="' + escAttr(key) + '">' + escHtml(label) + (ro ? ' <span style="color:var(--muted);font-size:11px;font-weight:400;">(只读)</span>' : '') + '</span>' + control + '</div>';
 }
 function tomlEscapeStr(s){
   return '"' + String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
@@ -1909,71 +2129,10 @@ async function runStats(kind){
   } catch (e) { showToast('生成失败：' + (e && e.message || e), 'err'); }
 }
 
-async function renderSpt(){
-  const el = document.getElementById('content');
-  if (API_STATE.online && API_STATE.dbId) {
-    el.innerHTML = '<h1 class="page-title">批量修正标贯</h1><div style="padding:48px;text-align:center;color:var(--slate);">扫描修正建议…</div>';
-    let data;
-    try { data = await apiPost('/db/' + API_STATE.dbId + '/spt-scan', {}); }
-    catch (e) {
-      el.innerHTML = '<h1 class="page-title">批量修正标贯</h1><div class="stat-card" style="margin-top:16px;padding:20px;color:var(--error);">扫描失败：' + escHtml((e && e.message) || e) + '</div>';
-      return;
-    }
-    const sg = data.suggestions || [];
-    const rows = sg.map(s => '<div class="t-row" style="grid-template-columns:100px 60px 90px 1fr;">' +
-      '<div>' + escHtml(s.zkbh || s.hole || '') + '</div>' +
-      '<div>' + escHtml(s.layer_no || '') + '</div>' +
-      '<div>' + escHtml(s.old_value || s.original || '') + ' → <b style="color:var(--primary);">' + escHtml(s.new_value || s.suggested || '') + '</b></div>' +
-      '<div class="muted small">' + escHtml((s.reason || s.message || '') + ' · ' + (s.rule_id || '')) + '</div>' +
-      '</div>').join('');
-    el.innerHTML = `
-      <h1 class="page-title">批量修正标贯</h1>
-      <p class="page-sub">${sg.length} 条修正建议 · SPT 杆长/击数/可塑性 · 与桌面版 V3.0.4 同源算法</p>
-      <div class="table-card">
-        <div class="t-head" style="grid-template-columns:100px 60px 90px 1fr;height:36px;"><div>钻孔</div><div>层</div><div>建议值</div><div>原因 · 依据</div></div>
-        ${rows || '<div style="padding:16px;color:var(--success);">✓ 无修正建议</div>'}
-      </div>
-      <div style="margin-top:14px;">
-        <button class="btn btn-secondary" onclick="route('hub')">返回工作台</button>
-        <button class="btn btn-secondary" onclick="showToast('应用建议：请到数据管理中编辑对应行（建议值已展示）','info')">查看应用说明</button>
-      </div>`;
-    return;
-  }
-
-
-  document.getElementById('content').innerHTML = `
-    <h1 class="page-title">批量修正标贯</h1>
-    <p class="page-sub">123 条修正建议可应用 · 含 39 孔 · SPT 杆长/击数/可塑性 · V3.0.4 口径</p>
-    <div class="toolbar">
-      <div class="tabs">
-        <div class="tab" onclick="route('borehole')">钻孔复核</div>
-        <div class="tab active">批量修正</div>
-        <div class="tab" onclick="showToast('统计成果 - 即将开放','err')">统计成果</div>
-      </div>
-      <div class="t-tools">
-        <button class="btn btn-secondary" style="color:var(--primary);border-color:var(--primary);">全部 · 123</button>
-        <button class="btn btn-secondary">仅重型 · 56</button>
-        <button class="btn btn-secondary">仅轻型 · 18</button>
-        <button class="btn btn-primary">一键应用全部</button>
-      </div>
-    </div>
-    <div class="table-card">
-      <div class="t-head" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;height:36px;">
-        <div>钻孔</div><div>层</div><div>类型</div><div>原 N</div><div>建议 N</div><div>原因 · 依据</div><div>应用</div>
-      </div>
-      <div class="t-row" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;"><div>ZK01-01</div><div>1</div><div>杆长修正</div><div>—</div><div style="color:var(--primary);font-weight:600;">5</div><div class="muted small">杆长 11m · GB 50021 系数表</div><div><span style="color:var(--success);font-weight:600;">已勾选</span></div></div>
-      <div class="t-row" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;"><div>ZK01-02</div><div>1</div><div>杆长修正</div><div>—</div><div style="color:var(--primary);font-weight:600;">5</div><div class="muted small">杆长 10m · V3.0.4 与 dao 一致</div><div><span style="color:var(--success);font-weight:600;">已勾选</span></div></div>
-      <div class="t-row" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;"><div>ZK01-03</div><div>2</div><div>击数修正</div><div>6</div><div style="color:var(--primary);font-weight:600;">8</div><div class="muted small">重型 N=6 偏低 · 广东表 D.0.1-2</div><div><span style="color:var(--success);font-weight:600;">已勾选</span></div></div>
-      <div class="t-row" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;"><div>ZK01-04</div><div>2</div><div>可塑性</div><div>硬塑</div><div style="color:var(--primary);font-weight:600;">可塑</div><div class="muted small">N=12 与硬塑不符 · 广东表 4.1</div><div><span style="color:var(--success);font-weight:600;">已勾选</span></div></div>
-      <div class="t-row" style="grid-template-columns:90px 40px 80px 60px 80px 1fr 60px;"><div>ZK01-05</div><div>1</div><div>风化程度</div><div>强风化</div><div style="color:var(--primary);font-weight:600;">全风化</div><div class="muted small">N'=35 · DBJ 15-31-2016 第4章</div><div><input type="checkbox"></div></div>
-    </div>
-  `;
-}
 let pendingMdbFile = null;
 async function renderMdb(){
   if (!API_STATE.checked) await detectBackend();
   const online = API_STATE.online;
-  // 在线且已有 db_id → 尝试恢复表快照；库已失效则清空
   if (online && API_STATE.dbId && !API_STATE.tables) {
     try {
       const r = await apiGet('/db/' + encodeURIComponent(API_STATE.dbId) + '/tables', { silent: true });
@@ -2092,8 +2251,7 @@ async function uploadMdbFile(){
   }
 }
 
-
-const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null, orderBy: '', orderDir: '', activeRow: -1 };
+const OData = { table: null, page: 1, pageSize: 50, keyword: '', searchCol: '', hiddenCols: {}, columns: [], total: 0, debounce: null, orderBy: '', orderDir: '', activeRow: -1, freeze: false };
 async function renderDataOnline(){
   if (!API_STATE.online || !API_STATE.dbId) return renderData();
   if (!API_STATE.tables) {
@@ -2164,19 +2322,37 @@ async function loadOnlinePage(page){
   if (si) OData.keyword = si.value.trim();
   const sc = document.getElementById('onlineSearchCol');
   if (sc) OData.searchCol = sc.value;
-  let q = '/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table)
+  let q = '/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table))
         + '?page=' + OData.page + '&page_size=' + OData.pageSize;
   if (OData.keyword) q += '&keyword=' + encodeURIComponent(OData.keyword) + '&search_col=' + encodeURIComponent(OData.searchCol) + '&exact=' + (OData.exact ? '1' : '0');
   if (OData.orderBy) q += '&order_by=' + encodeURIComponent(OData.orderBy) + '&order_dir=' + encodeURIComponent(OData.orderDir || 'asc');
   const info = document.getElementById('onlinePgInfo');
+  const grid = document.getElementById('onlineGrid');
   if (info) info.textContent = '查询中…';
+  if (grid && grid.dataset.loaded === '1') {
+    grid.insertAdjacentHTML('beforeend',
+      '<div class="skeleton" id="onlineSkeleton">' +
+      Array.from({length: 5}, () =>
+        '<div class="sk-row">' +
+        '<div class="sk-line short"></div>' +
+        '<div class="sk-line mid"></div>' +
+        '<div class="sk-line short"></div>' +
+        '<div class="sk-line long"></div>' +
+        '<div class="sk-line short"></div>' +
+        '<div class="sk-line short"></div>' +
+        '</div>'
+      ).join('') + '</div>');
+  }
   try {
     const r = await apiGet(q);
     OData.columns = r.columns || [];
     OData.total = r.total || 0;
     renderOnlineRows(r.rows || [], r);
+    if (grid) grid.dataset.loaded = '1';
   } catch (e) {
     if (info) info.textContent = '查询失败：' + escHtml(e.message);
+    const sk = document.getElementById('onlineSkeleton');
+    if (sk) sk.remove();
   }
 }
 
@@ -2197,7 +2373,7 @@ function inlineEdit(cell, rowId, col){
     const val = inp.value;
     cell.textContent = val;
     try {
-      await apiPut('/db/' + API_STATE.dbId + '/table/' + encodeURIComponent(OData.table) + '/' + rowId,
+      await apiPut('/db/' + API_STATE.dbId + '/table/' + encodeURIComponent(wsRealTable(OData.table)) + '/' + rowId,
                    { data: (function(){ var d = {}; d[col] = val; return d; })() });
       showToast('已保存', 'info');
       loadOnlinePage(OData.page);
@@ -2207,14 +2383,24 @@ function inlineEdit(cell, rowId, col){
   inp.addEventListener('blur', () => finish(true));
 }
 
+function cyChange(sel, rowId){
+  if (!can('data_edit')) { showToast('当前角色无编辑权限','err'); return; }
+  const v = sel.value === '1' ? 1 : 0;
+  apiPut('/db/' + API_STATE.dbId + '/table/' + encodeURIComponent(wsRealTable(OData.table)) + '/' + rowId,
+         { data: { CY: v } })
+    .then(() => { showToast('已保存：' + (v ? '参与' : '不参与'), 'info'); loadOnlinePage(OData.page); })
+    .catch(e => { showToast('保存失败：' + ((e && e.message) || e), 'err'); });
+}
+
 function renderOnlineRows(rows){
   OData.rowCache = {};
+  const sk = document.getElementById('onlineSkeleton');
+  if (sk) sk.remove();
   const tbl = OData.table || '';
   const all = (OData.columns || []).filter(c => c !== 'id');
   const hidden = OData.hiddenCols[tbl] || {};
   let cols = (WS_COLS[tbl] ? WS_COLS[tbl].filter(c => all.includes(c)) : all)
     .filter(c => !hidden[c]);
-  // 岩土名称同义列去重（TCMC/TCYMC 只显示一个，TCMC 优先）
   if (cols.includes('TCMC') && cols.includes('TCYMC')) {
     cols = cols.filter(c => c !== 'TCYMC');
   }
@@ -2225,9 +2411,12 @@ function renderOnlineRows(rows){
   const prev = document.getElementById('onlinePrev'), next = document.getElementById('onlineNext');
   if (prev) prev.disabled = OData.page <= 1;
   if (next) next.disabled = OData.page >= totalPages;
-  const gridColsReal = ['60px'].concat(cols.map(c => 'minmax(' + (WS_COL_WIDE.includes(c) ? 260 : 90) + 'px,' + (WS_COL_WIDE.includes(c) ? '3fr' : '1fr') + ')')).concat(['90px']).join(' ');
-  const minW = Math.max(640, cols.length * 90 + 160);
-  // 数字列右对齐（提升数值扫视效率）：纯数字值列
+  const colW = (c) => (COL_WIDTH[c] || (WS_COL_WIDE.includes(c) ? 120 : 90)) + 'px';
+  const colFlexible = (c) => (c === 'TCMS' || c === 'QYDC');
+  const gridColsReal = [COL_WIDTH['#'] + 'px']
+    .concat(cols.map(c => colFlexible(c) ? 'minmax(' + colW(c) + ',260px)' : 'minmax(' + colW(c) + ',1fr)'))
+    .concat([COL_OP_W + 'px']).join(' ');
+  const minW = cols.reduce((s, c) => s + (COL_WIDTH[c] || (WS_COL_WIDE.includes(c) ? 120 : 90)), 0) + COL_WIDTH['#'] + COL_OP_W;
   const numCols = {};
   if (rows.length) {
     cols.forEach(c => {
@@ -2235,38 +2424,67 @@ function renderOnlineRows(rows){
       if (vals.length && vals.every(v => typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())))) numCols[c] = true;
     });
   }
+  const isStrata = tbl === 'z_g_TuCeng';
+  const layerNoOf = (row) => {
+    if (!isStrata) return null;
+    const m = row.TCZCBH, s = row.TCYCBH;
+    if (m === null || m === undefined || m === '') return null;
+    return String(m) + '-' + (s === null || s === undefined || s === '' ? '0' : String(s));
+  };
+  const DEPTH_COL = { 'z_g_TuCeng':'TCCDSD', 'z_c_QuYang':'QYSD', 'z_c_QuYang__kf':'QYSD', 'z_y_BiaoGuan':'BGDSD', 'z_y_DongTan':'DTDSD', 'z_g_ShuiWei':'SWSD' };
+  const dcol = DEPTH_COL[tbl];
+  let renderRows = rows;
+  if (dcol && !OData.orderBy) {
+    renderRows = rows.slice().sort((a, b) => {
+      const za = String(a.ZKBH || ''), zb = String(b.ZKBH || '');
+      if (za !== zb) return za.localeCompare(zb, 'zh-Hans-CN', { numeric: true });
+      const da = (a[dcol] === null || a[dcol] === undefined || a[dcol] === '') ? Infinity : Number(a[dcol]);
+      const db = (b[dcol] === null || b[dcol] === undefined || b[dcol] === '') ? Infinity : Number(b[dcol]);
+      return da - db;
+    });
+  }
   const head = '<div class="t-head" style="grid-template-columns:' + gridColsReal + ';min-width:' + minW + 'px;position:sticky;top:0;z-index:3;box-shadow:0 1px 0 var(--hairline);">' +
-    '<div class="cell-fixed" style="left:20px;">#</div>' +
+    '<div' + (OData.freeze ? ' class="cell-fixed" style="left:20px;"' : '') + '>#</div>' +
     cols.map((c, ci) => {
       const sorted = OData.orderBy === c;
       const cn = escHtml(COLUMN_CN[c] || c);
       const ind = sorted ? '<span style="font-size:10px;margin-left:2px;">' + (OData.orderDir === 'desc' ? '↓' : '↑') + '</span>' : '<span class="col-act" style="font-size:10px;margin-left:2px;">⇅</span>';
-      return '<div class="' + (ci === 0 ? 'cell-fixed' : '') + '" style="display:flex;align-items:center;gap:5px;' + (ci === 0 ? 'left:80px;' : '') + '">' +
+      return '<div class="' + (OData.freeze && ci === 0 ? 'cell-fixed' : '') + '" style="display:flex;align-items:center;justify-content:center;gap:5px;' + (OData.freeze && ci === 0 ? 'left:80px;' : '') + '">' +
         '<span class="col-sort' + (sorted ? ' sorted' : '') + '" style="flex:1;min-width:0;" title="' + (sorted ? '点击切换排序方向' : '点击排序') + '" onclick="sortBy(\'' + c + '\')"><span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">' + cn + '</span>' + ind + '</span>' +
         '<span class="col-act" style="cursor:pointer;font-size:12px;" title="按此列筛选" onclick="filterBy(\'' + c + '\')">⌕</span>' +
       '</div>';
     }).join('') +
     '<div>操作</div></div>';
-  const body = rows.length ? rows.map((row, ri) => {
+  let lastZk = null, seqInHole = 0;
+  const body = renderRows.length ? renderRows.map((row, ri) => {
     const idJs = JSON.stringify(row.id == null ? '' : row.id).replace(/"/g, '');
     OData.rowCache[String(row.id)] = row;
     const activeCls = ri === OData.activeRow ? ' cell-active' : '';
+    const zk = String(row.ZKBH || '');
+    if (zk !== lastZk) { seqInHole = 1; lastZk = zk; } else { seqInHole++; }
+    const seqVal = seqInHole;
     return '<div class="t-row' + activeCls + '" style="grid-template-columns:' + gridColsReal + ';min-width:' + minW + 'px;' + (ri % 2 ? 'background:rgba(0,0,0,.015);' : '') + '" onclick="OData.activeRow=' + ri + ';paintActiveRow()">' +
-      '<div class="muted cell-fixed" style="left:20px;">' + (row.id == null ? '—' : escHtml(row.id)) + '</div>' +
+      '<div class="muted' + (OData.freeze ? ' cell-fixed' : '') + '"' + (OData.freeze ? ' style="left:20px;"' : '') + ' title="孔内序号">' + escHtml(seqVal) + '</div>' +
       cols.map((c, ci) => {
-        const cls = (ci === 0 ? ' cell-fixed' : '') + (WS_COL_WIDE.includes(c) ? ' cell-clamp' : '');
-        const stl = (ci === 0 ? 'left:80px;' : '') + 'cursor:pointer;' + (numCols[c] ? 'text-align:right;font-variant-numeric:tabular-nums;' : '');
+        const cls = (OData.freeze && ci === 0 ? ' cell-fixed' : '') + (WS_COL_WIDE.includes(c) ? ' cell-clamp' : '');
+        const stl = (OData.freeze && ci === 0 ? 'left:80px;' : '') + 'cursor:pointer;text-align:center;' + (numCols[c] ? 'font-variant-numeric:tabular-nums;' : '');
         if (c === 'CY') {
-          const on = row[c] === 1 || row[c] === '1';
-          return '<div style="' + (ci === 0 ? 'left:80px;' : '') + 'cursor:pointer;" title="点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')"><span class="status-pill ' + (on ? 'ok' : 'warn') + '">' + (on ? '参与' : '不参与') + '</span></div>';
+          const on = row[c] === 1 || row[c] === '1' || row[c] === '参与';
+          return '<div style="' + (OData.freeze && ci === 0 ? 'left:80px;' : '') + 'text-align:center;">' +
+            '<select data-row="' + idJs + '" onchange="cyChange(this,' + idJs + ')" ' + (can('data_edit') ? '' : 'disabled') +
+            ' style="height:26px;border:1px solid var(--hairline-strong);border-radius:8px;font-size:12px;padding:0 4px;background:#fff;color:var(--ink);cursor:pointer;">' +
+            '<option value="1"' + (on ? ' selected' : '') + '>参与</option>' +
+            '<option value="0"' + (on ? '' : ' selected') + '>不参与</option></select></div>';
+        }
+        if (c === 'TCXH' && isStrata) {
+          const lno = layerNoOf(row);
+          return '<div class="' + cls.trim() + '" style="' + stl + '" title="主层号-亚层号 · 点击编辑" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + escHtml(lno == null ? '—' : lno) + '</div>';
         }
         const val = row[c] === null || row[c] === undefined || row[c] === '' ? '<span class="muted">—</span>' : escHtml(fmtNum(row[c]));
         const tip = WS_COL_WIDE.includes(c) ? escAttr(row[c] == null ? '' : String(row[c])) + ' · 点击编辑' : '点击编辑';
         return '<div class="' + cls.trim() + '" style="' + stl + '" title="' + tip + '" onclick="inlineEdit(this, ' + idJs + ', \'' + c + '\')">' + val + '</div>';
       }).join('') +
       '<div>' +
-        (can('data_edit') ? '<a class="btn-link" href="javascript:openOnlineEditById(' + idJs + ')">编辑</a>' : '') +
-        (can('data_edit') && can('data_delete') ? ' · ' : '') +
         (can('data_delete') ? '<a class="btn-link" style="color:var(--error)" href="javascript:delOnlineRow(' + idJs + ')">删除</a>' : '') +
       '</div></div>';
   }).join('') : '<div style="padding:32px;text-align:center;color:var(--steel);">' + (OData.keyword ? '无匹配结果' : '暂无数据') + '</div>';
@@ -2353,26 +2571,25 @@ function openOnlineEdit(row){
     cols.forEach(c => { const el = qsName(form, c); data[c] = el ? el.value : ''; });
     try {
       if (row) {
-        await apiPut('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table) + '/' + encodeURIComponent(row.id), { data });
+        await apiPut('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table)) + '/' + encodeURIComponent(row.id), { data });
       } else {
-        await apiPost('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table), { data });
+        await apiPost('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table)), { data });
       }
       document.getElementById('modalMask').classList.remove('show');
       showToast(row ? '已保存' : '已新增');
       loadOnlinePage(row ? OData.page : 1);
-    } catch (e) { /* 错误已由 apiFetch toast */ }
+    } catch (e) {}
   };
 }
 async function delOnlineRow(id){
   if (!can('data_delete')) return showToast('当前角色无删除权限', 'err');
   if (!confirm('确认删除该条数据？删除后不可恢复。')) return;
   try {
-    await apiDelete('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(OData.table) + '/' + encodeURIComponent(id));
+    await apiDelete('/db/' + encodeURIComponent(API_STATE.dbId) + '/table/' + encodeURIComponent(wsRealTable(OData.table)) + '/' + encodeURIComponent(id));
     showToast('已删除');
     loadOnlinePage(OData.page);
-  } catch (e) { /* 错误已由 apiFetch toast */ }
+  } catch (e) {}
 }
-
 
 const BuildState = { running: false, timer: null, tries: 0, runId: null };
 function stopBuildPoll(){
@@ -2383,23 +2600,13 @@ async function renderBuild(){
   if (!API_STATE.checked) await detectBackend();
   const online = API_STATE.online && !!API_STATE.dbId;
   document.getElementById('content').innerHTML = `
-    <h1 class="page-title">生成 MDB · 一键产出理正可用的 .mdb</h1>
-    <p class="page-sub">GitHub Actions 免费 Windows 虚拟机 · 安装 ACE OLEDB → SQLite 重建 → 回读校验 → 上传下载</p>
+    <h1 class="page-title">生成 MDB</h1>
     <div class="banner-status" style="background:var(--navy);color:#fff;justify-content:space-between;">
       <div>
         <h2 style="color:#fff;font-size:22px;font-weight:700;margin-bottom:6px;">${online ? '在线生成 · 工作库 db_id=' + API_STATE.dbId : (API_STATE.online ? '请先上传数据库' : '当前为本地模式')}</h2>
-        <p style="color:var(--on-dark-muted);font-size:13px;">${online ? (API_STATE.dbName ? '文件 ' + escHtml(API_STATE.dbName) + ' · ' + fmtSize(API_STATE.dbSize) + ' · 触发后约 3-5 分钟完成' : '') : (API_STATE.online ? '后端在线但尚未上传数据库，请先到「数据库接入」上传 .lz / .mdb' : '未连接后端 · 可在本地模式继续浏览演示数据')}</p>
+        <p style="color:var(--on-dark-muted);font-size:13px;">${online ? (API_STATE.dbName ? '文件 ' + escHtml(API_STATE.dbName) + ' · ' + fmtSize(API_STATE.dbSize) : '') : (API_STATE.online ? '后端在线但尚未上传数据库' : '未连接后端')}</p>
       </div>
       <button class="btn btn-primary" id="buildBtn" onclick="startBuild()" style="height:56px;padding:0 24px;font-size:15px;background:#fff;color:var(--primary);" ${online ? '' : 'disabled'}>触发生成 →</button>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface-soft);border-radius:12px;padding:20px;margin-top:16px;flex-wrap:wrap;">
-      <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;">1</span><span style="font-size:13px;font-weight:600;">点触发生成</span></div>
-      <span style="color:var(--muted);font-size:14px;">→</span>
-      <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;">2</span><span style="font-size:13px;font-weight:600;">后端调 GitHub API</span></div>
-      <span style="color:var(--muted);font-size:14px;">→</span>
-      <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;">3</span><span style="font-size:13px;font-weight:600;">Windows 虚拟机转换 + 校验</span></div>
-      <span style="color:var(--muted);font-size:14px;">→</span>
-      <div style="display:flex;align-items:center;gap:10px;"><span style="width:28px;height:28px;background:var(--surface);border:1px solid var(--hairline-strong);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--steel);font-size:14px;font-weight:700;">4</span><span style="font-size:13px;font-weight:500;color:var(--steel);">返回下载链接</span></div>
     </div>
     <div class="table-card" style="padding:18px;margin-top:16px;">
       <div class="stat-head" style="justify-content:space-between;margin-bottom:12px;">
@@ -2407,7 +2614,7 @@ async function renderBuild(){
         <span id="buildBadge" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-soft);color:var(--steel);font-size:12px;font-weight:600;padding:6px 12px;border-radius:12px;">等待触发</span>
       </div>
       <div id="buildLog" style="background:var(--surface-soft);border-radius:8px;padding:14px;font-family:Consolas,monospace;font-size:12px;color:var(--steel);line-height:2;max-height:220px;overflow-y:auto;">
-        <div>${online ? '点击「触发生成」→ 后端 POST /api/db/' + API_STATE.dbId + '/build → 后台触发 GitHub Actions' : '本地模式无法触发构建，请先连接后端并在「数据库接入」上传数据库'}</div>
+        <div>${online ? '点击「触发生成」开始' : '本地模式无法触发构建，请先上传数据库'}</div>
       </div>
       <div class="build-actions" id="buildActions" style="display:none;">
         <button class="btn btn-primary" onclick="downloadArtifact()">下载 .lz 产物</button>
@@ -2483,7 +2690,7 @@ async function buildPollOnce(){
       badge.innerHTML = '✗ 生成失败';
       btn.disabled = false; btn.innerHTML = '重新触发';
     } else {
-      if (BuildState.tries >= 120) { // 20 分钟兜底
+      if (BuildState.tries >= 120) {
         stopBuildPoll();
         log.innerHTML += '<div style="color:var(--warning);">[' + ts() + '] 等待超时（20 分钟），任务仍在后台执行，可稍后重新进入本页查看。</div>';
         badge.style.background = 'var(--tint-yellow)'; badge.style.color = 'var(--warning)';
@@ -2529,12 +2736,11 @@ async function downloadApiFile(path, filename){
   }
 }
 
-
 async function main(){
   await openDB();
   await seed();
   loadApiState();
-  detectBackend(); // 异步探测后端：成功→在线模式；失败→静默降级本地模式
+  detectBackend();
   document.getElementById('loginUser').value = 'admin';
   document.getElementById('loginPwd').value = 'admin';
 }

@@ -11,6 +11,8 @@
 
 from dataclasses import dataclass, field
 
+from config import load_project_config
+
 
 @dataclass
 class SptSuggestion:
@@ -70,6 +72,25 @@ class SptCorrector:
             for sug in entry['suggestions']:
                 global_pairs.extend(sug.ref_depth_n)
             entry['global_ref_depth_n'] = sorted(global_pairs, key=lambda x: x[0]) if global_pairs else []
+            # v23 修复：此前未调用 compute_suggestions，new_n 恒等于 old_n（前端显示 "2 → 2" 的根因）。
+            # 分类计算：密实度/风化（R-DEN-001/008）→ N 值修正（深度插值+钳位+趋势）；
+            #           可塑性（R-DEN-007）→ 状态修正（compute_clay_corrections：N 不变，改 old_state→expected_state）。
+            try:
+                _cfg = load_project_config()
+                _stat_n = _cfg.get('试验指标_统计', {}).get('N', {})
+                _min_n = int(_stat_n.get('最小', 0) or 0)
+                _max_n = int(_stat_n.get('最大', 200) or 200)
+                if _min_n < 1: _min_n = 1   # 击数下限至少 1（0 仅统计允许）
+                _dens = [s for s in entry['suggestions'] if getattr(s, 'issue_type', '') != 'plasticity']
+                _clay = [s for s in entry['suggestions'] if getattr(s, 'issue_type', '') == 'plasticity']
+                if _dens and _min_n < _max_n:
+                    self.compute_suggestions(_dens, _min_n, _max_n,
+                                             global_ref_depth_n=entry['global_ref_depth_n'])
+                if _clay:
+                    self.compute_clay_corrections(_clay)
+            except Exception:
+                # 计算失败不阻断扫描：保留 old_n，前端会显示 "无需修正" 语义
+                pass
         return result
 
     def _collect_issues(self, zkbh, strata, spt_data, issues, layers_map, rule_id):

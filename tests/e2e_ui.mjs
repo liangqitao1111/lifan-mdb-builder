@@ -24,7 +24,7 @@ await page.waitForTimeout(2500);
 chk('工作台统计（408 孔）', await page.evaluate(() => document.getElementById('wsS0').textContent === '408'));
 chk('中文表头（岩土名称/描述）', await page.evaluate(() => { const h = document.querySelector('#onlineGrid .t-head'); return h && h.innerText.includes('岩土名称') && h.innerText.includes('描述'); }));
 chk('无英文列名', await page.evaluate(() => { const h = document.querySelector('#onlineGrid .t-head'); return h && !/ZKBH|TCMS/.test(h.innerText); }));
-chk('5 页签', await page.evaluate(() => document.querySelectorAll('#wsTabs [data-t]').length === 5));
+chk('6 页签', await page.evaluate(() => document.querySelectorAll('#wsTabs [data-t]').length === 6)); // v5+v16: 颗分试验
 chk('无表选择栏', await page.evaluate(() => !document.getElementById('dataTableSel')));
 
 // 深色模式
