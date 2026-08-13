@@ -1,7 +1,7 @@
 # 理反 Web · 交接文档（HANDOVER）
 
-> 更新：2026-08-13 13:10 · 服务地址：http://127.0.0.1:8766/
-> 最新提交：`b120f35`（main）· 另有 5 个文件**未提交**（见 §9）
+> 更新：2026-08-13 18:30 · 服务地址：http://127.0.0.1:8766/
+> 最新提交：见下方 git 历史（main，v33 已含 v1~v32 全部改动）· 工作区无未提交代码改动
 > 代码规模：`index.html` 2749 行（v31 清理后）/ 后端 FastAPI
 
 ---
@@ -83,6 +83,7 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 | **v30** | 全局注释专业化清理（19 处版本号注释，保留简洁模块说明） |
 | **v31** | 移除**全部注释** + 删除 215 行视觉粗糙 dead code（renderReview/renderBorehole/renderSpt 假数据页，route 归一化后不可达）；3023→2759 行 |
 | **v32** | 生成 MDB 页删除教学性文字（顶部副标题/4 步流程指示器/日志 API 路径说明），保留核心按钮与状态 |
+| **v33** | **可塑性修正闭环**：R-DEN-007 建议前端展示「可塑性 流塑→软塑（状态修正）」+ 一键应用写回地层 TCKSX（后端 spt-apply 定位深度所在层，新增 s_updated 计数）；列设置重名修复：TCYMC 显示「岩土名称（TCYMC）」默认不勾选 |
 
 ## 4. 当前功能清单（v32 状态）
 
@@ -132,9 +133,10 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 | 脚本 | 内容 | 说明 |
 |---|---|---|
 | `work/e2e_ui5.mjs` | 交互增强 26 项 | 已同步 v2 冻结开关断言（默认不冻结+开关开启冻结）、v3 CY 下拉断言 |
+| `work/e2e_v33.mjs` | v33 专项 9 项（可塑性展示/写回/列设置重名） | ALL PASS |
 | `work/e2e_ui4.mjs` | 排版专项 | 已同步 v5 土工核心列、v16 颗分 z_c_KeFen |
 | `tests/e2e_ui.mjs` | UI 基线 12 项 | 未动 |
-| `tests/e2e_api.py` | API 回归 16 项 | 未动 |
+| `tests/e2e_api.py` | API 回归 **17 项**（v33 新增 test_spt_apply_plasticity 可塑性写回+恢复） | 17 passed |
 
 运行：`node work/e2e_uiX.mjs` / `node tests/e2e_ui.mjs` / `python -m pytest tests/e2e_api.py -q`
 **注意**：v18 后 E2E 断言后端 `_issue_to_dict` 新增了 `layer_index/ref_value` 字段（纯新增，不破坏既有断言）；v24 新增 R-SPT-001 规则（测试库无跨层数据 → 0 条）。
@@ -188,11 +190,11 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 
 ## 10. 待办 / 建议
 
-1. **提交并推送**当前 5 个未提交文件（§9）。
+1. ~~提交并推送未提交文件~~ ✅ 已提交 `15356b4`（v1~v32）+ v33 提交。
 2. **跑全套 E2E** 确认 v1~v32 无回归：`node work/e2e_ui5.mjs && node work/e2e_ui4.mjs && node tests/e2e_ui.mjs && python -m pytest tests/e2e_api.py -q`。
 3. **真实项目库验证**：上传真实 .lz/.mdb，确认颗分（z_c_KeFen）与干密度/孔隙比（源库若有值）正常显示；若真实库颗分仍空，才需查 mdb_reader 列映射。
-4. 可塑性条目（R-DEN-007）的**状态标注修正写回**（old_state→expected_state）暂无前端路径（v23 遗留，toolsSptApply 只更新 N 值）。
-5. 地层列设置里"岩土名称"出现 2 次（TCYMC+TCMC 同义映射）——可改 COLUMN_CN 区分（v20 遗留）。
+4. ~~可塑性条目（R-DEN-007）的状态写回~~ ✅ **v33 已完成**：前端展示+确认文案+一键应用写回 TCKSX（后端定位深度所在层）。
+5. ~~地层列设置"岩土名称"出现 2 次~~ ✅ **v33 已完成**：TCYMC 显示「岩土名称（TCYMC）」默认不勾选。
 6. `renderReview/renderBorehole/renderSpt` 已删除（v31）——若未来需要独立复核/标贯页，需基于 renderTools/renderWorkspace 重建。
 
 ---

@@ -64,11 +64,15 @@ class SptApplyItem(BaseModel):
     zkbh: str = ""
     bgdsd: float = 0
     new_n: float = 0
+    issue_type: str = ""        # density / plasticity / weathering（v33：可塑性走状态写回）
+    expected_state: str = ""    # plasticity 条目的目标状态（写回地层 TCKSX）
 
 
 @router.post("/spt-apply")
 def spt_apply(db_id: str, payload: dict):
-    """将标贯修正建议写回工作库（BGJS 更新，参数化）"""
+    """将标贯修正建议写回工作库。
+    density/weathering → BGJS 更新；plasticity（R-DEN-007）→ 该标贯深度所在层 TCKSX 状态写回。
+    """
     items = [SptApplyItem(**x) for x in (payload or {}).get("items", []) if isinstance(x, dict)]
     if not items:
         raise HTTPException(400, "缺少 items")
@@ -76,16 +80,27 @@ def spt_apply(db_id: str, payload: dict):
     path = _db_path(db_id)
     conn = sqlite3.connect(path)
     updated = 0
+    n_updated = 0
+    s_updated = 0
     try:
         for it in items:
-            cur = conn.execute(
-                "UPDATE [z_y_BiaoGuan] SET BGJS = ? WHERE ZKBH = ? AND BGDSD = ?",
-                (float(it.new_n), it.zkbh, float(it.bgdsd)))
+            if it.issue_type == "plasticity" and it.expected_state:
+                # 可塑性状态修正：定位包含该标贯深度的地层（TCCDSD ≥ bgdsd 的最小层底），写回 TCKSX
+                cur = conn.execute(
+                    "UPDATE [z_g_TuCeng] SET TCKSX = ? WHERE ZKBH = ? AND TCCDSD = "
+                    "(SELECT MIN(TCCDSD) FROM [z_g_TuCeng] WHERE ZKBH = ? AND TCCDSD >= ?)",
+                    (it.expected_state, it.zkbh, it.zkbh, float(it.bgdsd)))
+                s_updated += cur.rowcount
+            else:
+                cur = conn.execute(
+                    "UPDATE [z_y_BiaoGuan] SET BGJS = ? WHERE ZKBH = ? AND BGDSD = ?",
+                    (float(it.new_n), it.zkbh, float(it.bgdsd)))
+                n_updated += cur.rowcount
             updated += cur.rowcount
         conn.commit()
     finally:
         conn.close()
-    return {"ok": True, "updated": updated, "total": len(items)}
+    return {"ok": True, "updated": updated, "n_updated": n_updated, "s_updated": s_updated, "total": len(items)}
 
 
 # ---------- 2) 动探杆长修正 ----------

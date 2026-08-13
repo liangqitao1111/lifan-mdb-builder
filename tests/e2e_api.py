@@ -124,6 +124,47 @@ def test_spt_scan(db_id):
     assert "suggestions" in r.json()
 
 
+def test_spt_apply_plasticity(db_id):
+    """v33：R-DEN-007 可塑性建议 → spt-apply 写回地层 TCKSX（验证后恢复原值）"""
+    r = req("post", f"/api/db/{db_id}/spt-scan", json={})
+    assert r.status_code == 200
+    all_sug = []
+    for g in (r.json().get("suggestions") or []):
+        all_sug.extend(g.get("suggestions") or [])
+    clay = next((s for s in all_sug if s.get("issue_type") == "plasticity" and s.get("expected_state")), None)
+    if not clay:
+        pytest.skip("测试库无可塑性建议")
+    zk, bg, es = clay["zkbh"], float(clay["bgdsd"]), clay["expected_state"]
+    # 读该孔地层，定位包含该深度的层
+    rr = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=200&keyword={zk}&search_col=ZKBH&exact=1")
+    assert rr.status_code == 200
+    layers = sorted(rr.json()["rows"], key=lambda x: (x.get("TCCDSD") or 0))
+    layer = next((x for x in layers if (x.get("TCCDSD") or 0) >= bg), None)
+    if not layer:
+        pytest.skip("未定位到包含深度的地层")
+    old_state = layer.get("TCKSX")
+    if not old_state:
+        pytest.skip("该层无可塑性状态")
+    # 应用写回
+    ap = req("post", f"/api/db/{db_id}/spt-apply", json={"items": [{
+        "zkbh": zk, "bgdsd": bg, "new_n": clay["old_n"],
+        "issue_type": "plasticity", "expected_state": es}]})
+    assert ap.status_code == 200, ap.text[:300]
+    assert ap.json().get("s_updated", 0) >= 1, f"状态写回计数异常: {ap.json()}"
+    # 回读确认
+    rr2 = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=200&keyword={zk}&search_col=ZKBH&exact=1")
+    layers2 = sorted(rr2.json()["rows"], key=lambda x: (x.get("TCCDSD") or 0))
+    layer2 = next((x for x in layers2 if (x.get("TCCDSD") or 0) >= bg), None)
+    assert layer2 and layer2.get("TCKSX") == es, f"写回未生效: {layer2.get('TCKSX')} vs {es}"
+    # 恢复原值（不污染 fixture 库）
+    if layer.get("id") is not None and old_state != es:
+        req("put", f"/api/db/{db_id}/table/z_g_TuCeng/{layer['id']}", json={"data": {"TCKSX": old_state}})
+        rr3 = req("get", f"/api/db/{db_id}/table/z_g_TuCeng?page=1&page_size=200&keyword={zk}&search_col=ZKBH&exact=1")
+        layers3 = sorted(rr3.json()["rows"], key=lambda x: (x.get("TCCDSD") or 0))
+        layer3 = next((x for x in layers3 if (x.get("TCCDSD") or 0) >= bg), None)
+        assert layer3 and layer3.get("TCKSX") == old_state, "恢复失败"
+
+
 def test_stats_karst(db_id):
     r = req("post", f"/api/db/{db_id}/stats/karst?project_type=B", json={})
     assert r.status_code == 200, r.text[:300]

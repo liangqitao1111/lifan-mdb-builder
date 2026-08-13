@@ -1268,7 +1268,7 @@ let WS = { review: null, zkbh: '', table: 'z_g_TuCeng', onlyIssues: false };
 const COLUMN_CN = {
   'ZKBH':'钻孔编号','GCSY':'工程代码','ID':'ID',
   'TCXH':'层号','TCZCBH':'主层','TCYCBH':'亚层','TCDZSD':'地质时代','TCDZCY':'地质成因',
-  'TCCDSD':'层底深度(m)','TCHD':'层厚(m)','TCYMC':'岩土名称','TCMC':'岩土名称','TCYS':'颜色',
+  'TCCDSD':'层底深度(m)','TCHD':'层厚(m)','TCYMC':'岩土名称（TCYMC）','TCMC':'岩土名称','TCYS':'颜色',
   'TCMSD':'密实度','TCSID':'湿度','TCKSX':'可塑性','TCFHCD':'风化程度','TCMS':'描述',
   'BGDSD':'深度(m)','BGGC':'杆长(m)','BGJS':'实测N','BGXZJS':'修正N',
   'DTDSD':'深度(m)','DTLX':'类型','DTJS':'N63.5','DTXZJS':'修正',
@@ -1428,7 +1428,7 @@ function openColSettings(){
   const html = '<div style="padding:16px 20px;max-height:60vh;overflow-y:auto;">' +
     '<div style="font-size:13px;color:var(--slate);margin-bottom:10px;">选择 ' + escHtml(WS_TAB_CN[OData.table] || COLUMN_CN[wsRealTable(OData.table)] || OData.table) + ' 显示的列</div>' +
     '<label style="display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px;cursor:pointer;border-bottom:1px dashed var(--hairline);margin-bottom:6px;"><input type="checkbox" id="freezeCols"' + (OData.freeze ? ' checked' : '') + '> <b>冻结前两列</b> <span style="color:var(--muted);font-weight:400;">（滚动时保持可见，默认关闭）</span></label>' +
-    all.map(c => '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" class="colchk" value="' + escAttr(c) + '"' + (!hidden[c] ? ' checked' : '') + '> ' + escHtml(COLUMN_CN[c] || c) + '</label>').join('') +
+    all.map(c => '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;"><input type="checkbox" class="colchk" value="' + escAttr(c) + '"' + (!hidden[c] && c !== 'TCYMC' ? ' checked' : '') + '> ' + escHtml(COLUMN_CN[c] || c) + (c === 'TCYMC' ? ' <span style="color:var(--muted);font-weight:400;">（与岩土名称同义，默认隐藏）</span>' : '') + '</label>').join('') +
     '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--hairline);">' +
     '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
@@ -1847,21 +1847,27 @@ async function toolsSpt(){
       (g.suggestions || []).forEach(s => {
         if (s && s.zkbh && s.new_n !== undefined && s.old_n !== undefined) {
           flat.push({ zkbh: s.zkbh, layer: s.layer_label || '', bgdsd: s.bgdsd,
-                      old_n: s.old_n, new_n: s.new_n, ref: s.ref_source || s.issue_type || '' });
+                      old_n: s.old_n, new_n: s.new_n, ref: s.ref_source || s.issue_type || '',
+                      type: s.issue_type || '', old_state: s.old_state || '', expected_state: s.expected_state || '' });
         }
       });
     });
+    const nCnt = flat.filter(s => s.type !== 'plasticity').length;
+    const cCnt = flat.length - nCnt;
     box.innerHTML = `
       <div class="ws-panel">
         <div class="p-head">标贯修正建议 · ${flat.length} 条
-          ${flat.length ? '<button class="btn btn-primary" style="padding:4px 14px;height:30px;font-size:12px;" onclick="toolsSptApply()">一键应用全部</button>' : ''}
+          ${flat.length ? '<button class="btn btn-primary" style="padding:4px 14px;height:30px;font-size:12px;" onclick="toolsSptApply()">一键应用全部' + (nCnt ? '（击数 ' + nCnt + '）' : '') + (cCnt ? '（状态 ' + cCnt + '）' : '') + '</button>' : ''}
         </div>
         <div style="max-height:420px;overflow-y:auto;">
           ${flat.map(s => {
-            const nTxt = s.new_n === s.old_n
-              ? '击数 N=' + escHtml(s.old_n) + ' <span style="color:var(--success);font-weight:600;">（无需修正）</span>'
-              : '原始击数 <span style="color:var(--muted);">' + escHtml(s.old_n) + '</span> → 修改后击数 <b class="spt-n" ondblclick="sptEditN(this)">' + escHtml(s.new_n) + '</b> <span style="color:var(--muted);font-size:11px;">(双击可改)</span>';
-            return '<div class="ws-issue" data-zk="' + escAttr(s.zkbh) + '" data-dsd="' + fmtNum(s.bgdsd) + '" data-n="' + s.new_n + '"><div><b style="color:var(--primary);">' + escHtml(s.zkbh) + '</b> · 深度 ' + fmtNum(s.bgdsd) + 'm · ' + nTxt + '</div><div class="fld">' + escHtml(s.ref) + '</div></div>';
+            const isClay = s.type === 'plasticity';
+            const nTxt = isClay
+              ? '可塑性 <span style="color:var(--muted);">' + escHtml(s.old_state || '?') + '</span> → <b style="color:var(--primary);">' + escHtml(s.expected_state || '?') + '</b> <span style="color:var(--muted);font-size:11px;">（状态修正）</span>'
+              : (s.new_n === s.old_n
+                  ? '击数 N=' + escHtml(s.old_n) + ' <span style="color:var(--success);font-weight:600;">（无需修正）</span>'
+                  : '原始击数 <span style="color:var(--muted);">' + escHtml(s.old_n) + '</span> → 修改后击数 <b class="spt-n" ondblclick="sptEditN(this)">' + escHtml(s.new_n) + '</b> <span style="color:var(--muted);font-size:11px;">(双击可改)</span>');
+            return '<div class="ws-issue" data-zk="' + escAttr(s.zkbh) + '" data-dsd="' + fmtNum(s.bgdsd) + '" data-n="' + s.new_n + '" data-type="' + escAttr(s.type) + '" data-state="' + escAttr(s.expected_state) + '"><div><b style="color:var(--primary);">' + escHtml(s.zkbh) + '</b> · 深度 ' + fmtNum(s.bgdsd) + 'm · ' + nTxt + '</div><div class="fld">' + escHtml(s.ref) + '</div></div>';
           }).join('') || '<div style="padding:20px;color:var(--success);">✓ 无修正建议</div>'}
         </div>
       </div>`;
@@ -1869,10 +1875,16 @@ async function toolsSpt(){
 }
 async function toolsSptApply(){
   const items = Array.from(document.querySelectorAll('#toolsResult [data-zk]')).map(el => ({
-    zkbh: el.dataset.zk, bgdsd: parseFloat(el.dataset.dsd), new_n: parseFloat(el.dataset.n)
+    zkbh: el.dataset.zk, bgdsd: parseFloat(el.dataset.dsd), new_n: parseFloat(el.dataset.n),
+    issue_type: el.dataset.type || '', expected_state: el.dataset.state || ''
   }));
   if (!items.length) return;
-  if (!confirm('确认将 ' + items.length + ' 条标贯修正值写回工作库？')) return;
+  const nCnt = items.filter(x => x.issue_type !== 'plasticity').length;
+  const cCnt = items.length - nCnt;
+  let msg = '确认写回工作库？';
+  if (nCnt) msg += '\n击数修正 ' + nCnt + ' 条（更新标贯 BGJS）';
+  if (cCnt) msg += '\n可塑性状态修正 ' + cCnt + ' 条（更新地层 TCKSX）';
+  if (!confirm(msg)) return;
   try {
     const r = await apiPost('/db/' + API_STATE.dbId + '/spt-apply', { items });
     showToast('已应用 ' + (r.updated || 0) + ' / ' + items.length + ' 条', r.updated ? 'info' : 'err');
