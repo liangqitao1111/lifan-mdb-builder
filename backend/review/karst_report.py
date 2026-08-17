@@ -204,6 +204,7 @@ def _build_karst_constants():
     """重建模块级岩溶统计派生常量（import 时与配置保存后各调用一次）"""
     global _kheight_thresholds, _kdepth_thresholds
     global _kline_weak, _kline_med, _karea_weak, _karea_med
+    global _LINE_WEAK, _LINE_MEDIUM, _AREA_WEAK, _AREA_MEDIUM
     global STAT_VARS
     _karst_cfg = load_project_config().get('岩溶统计', {})
     _kheight_thresholds = _karst_cfg.get('洞高阈值', [0, 1, 5, 10])
@@ -214,7 +215,17 @@ def _build_karst_constants():
         _karea_weak = float(_karst_cfg.get('见洞隙率_弱发育', 15))
         _karea_med = float(_karst_cfg.get('见洞隙率_中等发育', 45))
     except (TypeError, ValueError):
-        pass
+        # P2-6（Codex 复核）：配置异常值显式回退默认，避免 _LINE_WEAK 等别名 NameError
+        _kline_weak = 5.0
+        _kline_med = 20.0
+        _karea_weak = 15.0
+        _karea_med = 45.0
+    # 发育程度判定阈值别名（judge_development 引用）——必须随重建一起刷新，
+    # 否则热重载后 judge_development 仍用旧阈值（Codex 复核 P1-3）
+    _LINE_WEAK = _kline_weak
+    _LINE_MEDIUM = _kline_med
+    _AREA_WEAK = _karea_weak
+    _AREA_MEDIUM = _karea_med
     STAT_VARS = {
         'height': {'label': '溶洞高度H（m）', 'bins': _make_bins('H', _kheight_thresholds),
                    'fn': _make_bin_fn(_kheight_thresholds)},
@@ -236,10 +247,6 @@ _build_karst_constants()
 #   线岩溶率(%)：弱<5、中5~20、强>20；钻孔见洞隙率(%)：弱<15、中15~45、强>45
 #   判定规则：三个指标中从高到低有 1 个达标即定为该等级
 #   （本项目仅用 线岩溶率 + 钻孔见洞率 两项，地表岩溶发育密度不参与）
-_LINE_WEAK = _kline_weak
-_LINE_MEDIUM = _kline_med
-_AREA_WEAK = _karea_weak
-_AREA_MEDIUM = _karea_med
 
 def _classify_fill(name):
     """按岩土名称判断充填类型

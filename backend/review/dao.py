@@ -394,7 +394,10 @@ class DataAccess:
                 f"kl_075,kl_074,kl_05,kl_01,kl_005,kl_002,kl0 "
                 f"FROM {self._t('z_c_KeFen')} WHERE ZKBH=?", [zkbh])
             for kf in kf_cur.fetchall():
-                kefen_map[str(kf[0]).strip()] = _kefen_to_buckets(kf[1:])
+                try:
+                    kefen_map[str(kf[0]).strip()] = _kefen_to_buckets(kf[1:])
+                except Exception:
+                    pass  # 单行异常不拖垮整批（Codex 复核 P1-5 逐行隔离）
             kf_cur.close()
         except Exception:
             _log_error(f'读取颗分失败 ZKBH={zkbh}: {traceback.format_exc()}')
@@ -562,8 +565,11 @@ class DataAccess:
                 f"FROM {self._t('z_c_KeFen')}")
             for kf in kf_cur.fetchall():
                 key = (str(kf[0]).strip(), str(kf[1]).strip())
-                buckets = _kefen_to_buckets(kf[2:])
-                kefen_map[key] = buckets
+                try:
+                    buckets = _kefen_to_buckets(kf[2:])
+                    kefen_map[key] = buckets
+                except Exception:
+                    pass  # 单行异常不拖垮整批（Codex 复核 P1-5 逐行隔离）
             kf_cur.close()
         except Exception:
             pass
@@ -669,7 +675,8 @@ class DataAccess:
             # P1-4：e₀ 来源统一——不再从取样表 QYKXB 取（A 类此前用取样表、
             # B 类用固结表，同库 A/B 统计 e₀ 来源与数值不一致）；统一由固结表
             # GJKXBP0(-) 提供，下方固结块覆盖写入，取样表值仅作固结缺失兜底
-            kxb = None
+            # （P1-6：恢复注释承诺的 QYKXB 兜底初始值，固结有值仍覆盖）
+            kxb = _val(r, 'QYKXB', 'QYKXB_')
 
             il, ip = self._calc_il_ip(hsl, yx, sy)
 

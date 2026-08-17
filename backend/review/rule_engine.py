@@ -4,10 +4,11 @@ import openpyxl
 from dataclasses import dataclass
 from config import (
     classify_lithology, classify_soil, il_to_plasticity, spt_to_density, spt_to_plasticity,
-    spt_to_weathering, dpt_to_density, PLASTICITY_ORDER,
-    DENSITY_ORDER, VERTICAL_THIN_LAYER_DENSE,
+    spt_to_weathering, dpt_to_density,
     load_project_config, normalize_state_word,
 )
+import config as _cfg_mod  # P2-2（Codex 复核）：DENSITY_ORDER/VERTICAL_THIN_LAYER_DENSE 按值导入会在
+                           # reload_config() 重建后失效 → R-DEN-010 恒用旧值；改运行时读取 config 模块
 from applog import get_logger
 import dao  # V2.2.2（C4）：构造时向 DAO 注入工程类型，接线 A 类动探杆长修正
 
@@ -892,6 +893,8 @@ class RuleEngine:
             if il is None:
                 continue
             il_state = il_to_plasticity(il, self.project_type)  # 由IL推导的状态
+            if il_state is None:
+                continue  # 区间空隙（配置可编辑）→ 不判定（Codex 复核 P1-1 补防）
             if not actual_tcksx:
                 continue  # 缺数据则不评判
             if actual_tcksx != std_state:
@@ -915,6 +918,8 @@ class RuleEngine:
             if il is None:
                 continue
             il_state = il_to_plasticity(il, self.project_type)  # 由IL推导的状态
+            if il_state is None:
+                continue  # 区间空隙（配置可编辑）→ 不判定（Codex 复核 P1-1 补防）
             if not actual_tcksx:
                 continue  # 缺数据则不评判
             if actual_tcksx == std_state and il_state != actual_tcksx:
@@ -1042,9 +1047,9 @@ class RuleEngine:
         if (classify_lithology(prev['tcymc']) in ('sand', 'gravel')
                 and classify_lithology(curr['tcymc']) in ('sand', 'gravel')
                 and prev['tcmsd'] and curr['tcmsd']):
-            po = DENSITY_ORDER.get(prev['tcmsd'], 0)
-            co = DENSITY_ORDER.get(curr['tcmsd'], 0)
-            if co < po and curr['tchd'] > VERTICAL_THIN_LAYER_DENSE:
+            po = _cfg_mod.DENSITY_ORDER.get(prev['tcmsd'], 0)
+            co = _cfg_mod.DENSITY_ORDER.get(curr['tcmsd'], 0)
+            if co < po and curr['tchd'] > _cfg_mod.VERTICAL_THIN_LAYER_DENSE:
                 return self._make_issue('R-DEN-010', level, ctx, 'TCMSD',
                     f'深部密实度{curr["tcmsd"]}比上层{prev["tcmsd"]}更松')
         return None
