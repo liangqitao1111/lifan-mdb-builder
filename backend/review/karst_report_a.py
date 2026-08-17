@@ -360,10 +360,13 @@ def _write_table7_a(rows, site_stats, path):
     # 记录模板原始行数，用于判断超出行
     template_max_row = ws.max_row
 
-    # P2-1：填充前清空模板数据区旧值（模板自带示例/旧数据行时，本次行数较少
-    # 会残留旧值混入输出；父模块 karst_report 是"先删第 4 行以下全部行"再写，
-    # 此处等价处理：仅清值、保留边框/行高/合并结构）
-    for r in range(data_start, template_max_row + 1):
+    # P2-1：填充前清空模板数据区旧值（模板自带示例/旧数据行时残留混入输出）
+    # 范围收窄到本次数据行数（data_start .. data_start+len(rows)-1）——
+    # 修复前清到 template_max_row 会把表尾注记/落款（如"注：本表以勘察报告
+    # 为准"、审核签名行）一并清掉，T9 裁剪随之误删（T9 测试回归）；
+    # 模板示例行数远超本次数据的极端场景仍残留，由 T9 尾部裁剪兜底
+    _clear_end = min(template_max_row, data_start + len(rows) - 1)
+    for r in range(data_start, _clear_end + 1):
         for c in range(1, ws.max_column + 1):
             ws.cell(row=r, column=c).value = None
 

@@ -534,7 +534,9 @@ def classify_soft_soil(wu, e, hsl, yx, proj_type='B'):
         # 半开语义 [min,max)：上界归下一档（wu=3→淤泥质土、e=1.5→淤泥）；
         # P3-11：末档判定不再依赖 TOML 键顺序——上限为自然上界占位
         # （wu最大=100 / e最大≥999）即视为含端点，顺序调整不影响边界语义
-        last = (c['wu_max'] >= 100 or c['e_max'] >= 999)
+        # P3-11 修正：末档判定需 wu/e 均为自然上界占位（and）——
+        # 此前用 or，软黏性土 e_max=999 兜底占位被误判为末档，wu=3 边界错归
+        last = (c['wu_max'] >= 100 and c['e_max'] >= 999)
         wu_ok = c['wu_min'] <= wu and (wu <= c['wu_max'] if last else wu < c['wu_max'])
         e_ok = c['e_min'] <= e and (e <= c['e_max'] if last else e < c['e_max'])
         if wu_ok and e_ok:
@@ -598,7 +600,9 @@ def spt_correction_gb50021(L: float) -> float:
 
 def _build_dpt_rod():
     """重建 动探杆长/击数轴（维度校验后覆盖默认轴）"""
-    global DPT_ROD_L, DPT_ROD_N
+    # 修复：DPT_ROD_ALPHA 也须 global——此前缺失导致函数局部赋值，
+    # dpt_rod_correction_a 引用模块级名 NameError（Web 重构引入，桌面移植同步暴露）
+    global DPT_ROD_L, DPT_ROD_N, DPT_ROD_ALPHA
     # 动探 N63.5 杆长修正系数（GB50021-2001）
     # 杆长 L 与击数 N 轴可由 TOML「公用.动探杆长修正_A类」覆盖（无配置回退硬编码）；
     # 系数矩阵 α[N_idx][L_idx] 为 GB50021-2001 附录B 表B.0.1 固定值（TOML 不含矩阵），
