@@ -282,3 +282,23 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 ### 确认无问题（第二轮实测）
 - 纵断面 500 根因是**数据**（所选孔 ZKSD=0 被有效孔过滤），非代码缺陷；ZKSD>0 的孔生成正常
 - 全量单孔/全库一致性 1066/1066；配置热生效（674→436→674）；路径穿越 400 封堵；page_size 钳制
+
+## 15. Web 修复移植桌面端（2026-08-14，桌面路径 Desktop\lizheng_review_backup_2026.08.11）
+
+对照检查结论：Web 端 19 项修复中 **16 项在桌面端同源存在**（桌面为 Web 母本，仅独立演化出少量差异）。
+
+### 已移植（桌面 模块/ 目录，提交 2953a60，分支 codex/optimize-v2.2）
+- **P0**：get_all_test 补颗分（实测桌面全库 147→251，GRS 104 条）；spt_corrector scan_all 激活 compute_suggestions（new_n 不再恒等 old_n）；_load_toml 捕获 TOMLDecodeError；load_project_config 失败不缓存
+- **P1**：spt_to_weathering None→None / il_to_plasticity 空隙→None / IL≥ 中文键；派生常量热重载（config.reload_config + dao/rule_engine/karst_report/karst_report_a 钩子）；config_studio 保存后热重载；GJKXBP0_ 变体探测；get_all_test_full 回退列名 + kxb 统一；钻孔列探测；review_strata 单规则异常隔离（v43）；类级列名缓存实例级；karst_report_a 排序 TypeError/零厚溶洞过滤/双实例 reload；profile_strip 单孔分段/末段边界/prev 不倒退；**补 SPT_ROD_CORRECTION_A 定义**（原引用未定义 NameError 隐患）
+- **P2**：R-CHK-003 零深度防护等
+- **测试**：桌面 test_business_logic **108 passed**（1 项断言随 P1-⑦ 同步更新）
+
+### 移植联动修复（Web 同步，提交 d602c62）
+- DPT_ROD_ALPHA global 缺失（Web 重构引入，桌面测试暴露 → 两端修）
+- classify_soft_soil 末档判定 or→and（e_max=999 占位误判末档，桌面测试暴露 → 两端修）
+- karst_report_a 模板清理范围收窄（不误伤脚注/落款，T9 测试暴露 → 两端修）
+
+### 桌面端说明
+- 桌面仓库远端为 **Gitee**（shenzhou666），修复提交在分支 codex/optimize-v2.2（已推送）
+- 备份目录 `模块_webfix_backup_20260814/` 保留可回滚（已 gitignore）
+- 桌面端仍有 Web 独有功能差异：R-SPT-001 跨层规则（Web v24 新增）未移植——如需桌面同样支持可后续补
