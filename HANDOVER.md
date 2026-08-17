@@ -302,3 +302,54 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 - 桌面仓库远端为 **Gitee**（shenzhou666），修复提交在分支 codex/optimize-v2.2（已推送）
 - 备份目录 `模块_webfix_backup_20260814/` 保留可回滚（已 gitignore）
 - 桌面端仍有 Web 独有功能差异：R-SPT-001 跨层规则（Web v24 新增）未移植——如需桌面同样支持可后续补
+
+## 16. Codex 联合复核与修复记录（2026-08-16）
+
+### 16.1 复核过程
+- 联合 Codex CLI（codex-cli 0.147.0，model deepseek-v4-flash）组成复核团队，
+  对**桌面版**做深度复核（只读），产物 `work/codex_review_prompt.md` /
+  `work/codex_review_output.txt`。
+- 复核结论：**有条件可信（Conditional Pass）**——主体移植方向正确、8 项核心修复
+  质量良好；但发现必改 4 项（P1-1 调用点 None 防护 / P1-2 统计剔除 / P1-3 阈值
+  热重载断链 / P1-4 重载清单空实现）与应改项（P1-5~6、P2-1~12）。
+- 两个复核官分歧焦点：① "函数签名语义变更必须连同调用点一起验收"（Codex 立场，
+  我方原以函数行为对齐为验收标准）；② 热重载是否"真正生效且幂等"（Codex 实证
+  _LINE_WEAK 断链 / 6 模块钩子缺失）；③ R-SPT-001 缺失定性（漏报非错误放行）。
+  — 我方接受 Codex 验收标准，本轮全部按 P1/P2 修复并验证，分歧消解。
+
+### 16.2 本轮修复（桌面提交 68b4482 / Web 提交 2eeeb45）
+| 项 | 两端 | 内容 |
+|---|---|---|
+| P1-1 | 两端 | rule_engine R-PLS-001/002 il_state is None 防护；桌面 _den_spt_plasticity/_den_spt_weathering/_crs_std_stratum 补 None 守卫（已在上轮 codex_fix_p11） |
+| P1-2 | 桌面+已验证 | soil_stats 标贯 spt_state None 显式防护（区间空隙样本跳过） |
+| P1-3 | 两端 | karst_report _LINE_WEAK/_LINE_MEDIUM/_AREA_WEAK/_AREA_MEDIUM 别名移入 `_build_karst_constants()`，热重载刷新 judge_development |
+| P1-4 | 桌面 | soil_stats/soil_stats_v2/bearing_capacity/column_dxf/profile_dxf/profile_strip 补 `_build_config()`+`reload_from_config()`；config_studio 重载清单 10/10 生效 |
+| P1-5 | 两端 | dao get_test_data/get_all_test 颗分批量循环逐行 try/except 隔离 |
+| P1-6 | 两端 | get_all_test_full 恢复 QYKXB e₀ 兜底初始值（注释承诺兑现） |
+| P2-1 | 桌面 | dao 删除 import 期冗余旧块（坏值不再崩 import） |
+| P2-2 | 两端 | rule_engine DENSITY_ORDER/VERTICAL_THIN_LAYER_DENSE 改运行时读 config 模块 |
+| P2-3 | 桌面 | RuleEngine 增 `reload_rules()` + 弱引用注册表 `reload_engines()`，config_studio 保存后刷新实例状态（规则启停/等级/阈值免重启） |
+| P2-4 | 桌面 | spt_corrector.scan_all N 范围 `int('5.5')` 类坏值防御 + 失败日志 |
+| P2-5 | 两端 | karst_report(_a) 溶洞厚度 tchd=0 时不再被 `0 or fallback` 唤醒计入 |
+| P2-6 | 两端 | karst_report _build_karst_constants except 显式回退默认 5/20/15/45 |
+| P2-9 | 桌面 | actions._load_boreholes enable_test_review=False 时跳过全库试验/颗分扫描 |
+| P2-10 | 桌面 | spt_dialog 三处可塑性层跳过 N 插值（new_n 保持 old_n，仅状态修正） |
+
+- 复核判定修复后未采纳/不适用项：P2-8（LF/CRLF 行尾混合，Python 无影响、git 正常处理，
+  不统一改以免污染 diff）；P2-11（R-SPT-001 无规则差异，Web-only 有意保留、当前测试库零影响）；
+  P2-12（hasattr 死代码，无害保留）；P2-3 中的"异常弹窗"未做（traceback 已输出到日志，行为一致）。
+
+### 16.3 验证结果
+- 桌面 `pytest tests/test_business_logic.py`：**108 passed**（修复前后一致）。
+- Web `pytest tests/e2e_api.py`：**19 passed**。
+  ⚠ 本机因 pytest-env 插件自动加载与 httpx2 shim 冲突，需 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`
+  运行 pytest，否则 collection 期 INTERNALERROR（与代码无关）。
+- 两端一致性 cmp_runner：**RESULT: IDENTICAL**（desktop 251 = web 251，GRS 104 + 非GRS 147）。
+- 真实库（江村西 ee7d0c77）全库复核：658 孔 / 674 issues（R-GRS-001×436 + R-PLS-002×238），
+  与修复前基线一致——本轮均为健壮性/热重载类修复，零行为回归。
+
+### 16.4 两条提交
+- 桌面 `codex/optimize-v2.2` → Gitee shenzhou666：`68b4482`
+- Web `main` → GitHub lifan-mdb-builder：`2eeeb45`
+- 备注：桌面 work/ 由 .git/info/exclude 忽略（含本复核产物，本地留存备查）。
+
