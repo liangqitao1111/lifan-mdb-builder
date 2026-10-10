@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # mdbtools：Linux 读取 .mdb（ACE 仅在 Windows 可用，mdbtools 只读）
-RUN apt-get update && apt-get install -y --no-install-recommends mdbtools \
+RUN apt-get update && apt-get install -y --no-install-recommends mdbtools \ unixodbc
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
