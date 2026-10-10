@@ -14,9 +14,19 @@ STYLE = '地质'
 MAX_DEPTH = 15
 
 # 地层颜色（从 TOML 读取，兼容无配置文件的回退）
+# V3.0.5（一致性清单 B5 同步）：懒加载——避免 import 时读取配置文件失败导致后端启动崩溃；
+# 首次 generate_strip 时才加载，失败回退默认色并写日志
+_color_cfg = {}
+FORM_COLORS = {
+    '填土': 251, '黏性土': 50, '粉土': 130, '砂土': 30, '碎石土': 170,
+    '软土': 120, '灰岩': 140, '花岗岩': 140, '砂岩': 160, '基岩': 140,
+}
+_cfg_loaded = False
+
+
 def _build_config():
-    """重建 剖面颜色映射（import 时与配置保存后各调用一次）"""
-    global _color_cfg, FORM_COLORS
+    """重建 剖面颜色映射（懒加载：首次生成 DXF 时调用；配置保存后经 reload 调用）"""
+    global _color_cfg, FORM_COLORS, _cfg_loaded
 
     _color_cfg = load_project_config().get('DXF_剖面颜色', {})
     FORM_COLORS = {
@@ -31,14 +41,27 @@ def _build_config():
         '砂岩': _color_cfg.get('砂岩', 160),
         '基岩': _color_cfg.get('基岩', 140),
     }
+    _cfg_loaded = True
+
+
+def _ensure_config():
+    """懒加载守卫：首次调用时加载配置，失败时使用默认颜色"""
+    global _cfg_loaded
+    if _cfg_loaded:
+        return
+    try:
+        _build_config()
+    except Exception as e:
+        from applog import log_error
+        log_error(f'剖面颜色配置加载失败，使用默认颜色: {e}')
+        _cfg_loaded = True
 
 
 def reload_from_config():
     """配置保存后重建本模块派生常量（review_api._reload_config_modules 调用）"""
+    global _cfg_loaded
+    _cfg_loaded = False
     _build_config()
-
-
-_build_config()
 
 
 def _text(msp, text, pos, height=1.2, halign=TextEntityAlignment.LEFT):
@@ -192,6 +215,7 @@ def _build_column(da, borehole_ids, slice_m=0.5):
 
 def generate_strip(da, output_path, segment_m=500):
     """生成地层剖面条带 DXF"""
+    _ensure_config()
     boreholes = da.get_all_boreholes()
     segments = _build_segments(boreholes, segment_m)
     if not segments:
@@ -202,11 +226,6 @@ def generate_strip(da, output_path, segment_m=500):
     s.dxf.bigfont = 'hztxt.shx'
     s.dxf.width = 0.7
     msp = doc.modelspace()
-
-    # 水位收集
-    all_water_depths = []
-    for da_zkbh in [s['boreholes'] for s in segments]:
-        for zkbh in da_zkbh[:1] if da_zkbh else []: pass  # skip water for now
 
     y_top = MAX_DEPTH + 4  # 留 4 单位标题空间
 
@@ -258,8 +277,10 @@ def generate_strip(da, output_path, segment_m=500):
                     d = w.get('swsd', 0) or 0
                     if d > 0:
                         water.append(d)
-            except:
-                pass
+            except Exception as e:
+                # B5 同步：水位读取失败写告警日志，不再静默吞掉
+                from applog import log_warning
+                log_warning(f'剖面条带水位数据读取失败（孔 {zkbh}）: {e}')
         if water:
             w_min, w_max = min(water), max(water)
             wy = y_top - (w_min + w_max) / 2

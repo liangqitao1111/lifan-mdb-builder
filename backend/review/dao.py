@@ -1,5 +1,5 @@
 """理反 — 数据访问层 (Access MDB)"""
-import os, datetime, traceback, time
+import os, datetime, traceback, time, math
 from config import DTLX_MAP, SWLX_MAP, SWXZ_MAP, ALLOWED_FIELDS, load_project_config, normalize_state_word, dpt_rod_length_offset
 
 
@@ -28,8 +28,12 @@ def set_project_type(project_type):
 # （铁建承载力计算表.xlsx 标贯修正 sheet）；知识库《标贯杆长修正系数》仅收录
 # 至 21m（3~21m 与项目表逐项吻合），24m+ 段未见铁路规程原文直接佐证、公开
 # 文献存在分歧（0.67/0.65/0.63 等），按项目表单一来源执行（合规审查可疑项 2.4）。
-_SPT_ROD_LENGTH = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30]
-_SPT_COEFF = [1.00, 0.92, 0.86, 0.81, 0.77, 0.73, 0.70, 0.68, 0.65, 0.63]
+# V3.0.5（一致性清单 B3 同步）：模块级默认空表——TOML 缺「标贯杆长修正_B类」
+# 或格式异常时按【不修正】处理（_spt_correction_coefficient 空表兜底返回 1.0），
+# 与桌面端 V3.0.5+ 口径一致；Web 此前硬编码整张铁建表，配置缺项时仍套用修正，
+# 两端结果分叉。配置存在时 _build_rod_config() 仍会加载真实表。
+_SPT_ROD_LENGTH = []
+_SPT_COEFF = []
 KEFEN_DEDUPE_0075 = True
 
 
@@ -40,16 +44,28 @@ def _build_rod_config():
     参数中心修改后不生效；现由 reload_from_config 重建。
     """
     global _SPT_ROD_LENGTH, _SPT_COEFF, KEFEN_DEDUPE_0075
-    _cfg = load_project_config()
-    _tmp = _cfg.get('公用', {}).get('标贯杆长修正_B类', {})
-    if _tmp:
+    # Always clear the derived table before loading.  A removed or malformed
+    # TOML section must disable correction immediately instead of retaining the
+    # previous process-wide values after a configuration reload.
+    _SPT_ROD_LENGTH = []
+    _SPT_COEFF = []
+    try:
+        _cfg = load_project_config()
+    except Exception as exc:
+        print(f'[dao] 标贯杆长修正配置读取失败，按不修正处理: {exc}')
+        _cfg = {}
+    _common = _cfg.get('公用', {}) if isinstance(_cfg, dict) else {}
+    _tmp = _common.get('标贯杆长修正_B类', {}) if isinstance(_common, dict) else {}
+    if isinstance(_tmp, dict):
         items = []
         for k, v in _tmp.items():
             if k == '用途': continue
             try:
                 length = float(k.replace('m', ''))
-                items.append((length, float(v)))
-            except (ValueError, TypeError):
+                coeff = float(v)
+                if math.isfinite(length) and length > 0 and math.isfinite(coeff):
+                    items.append((length, coeff))
+            except (ValueError, TypeError, OverflowError, AttributeError):
                 continue
         items.sort()
         # P2-6 同口径：同值双档去重（严格递增，避免插值除零）
@@ -63,7 +79,7 @@ def _build_rod_config():
         if len(items) >= 2:
             _SPT_ROD_LENGTH = [l for l, c in items]
             _SPT_COEFF = [c for l, c in items]
-    _kefen_cfg = _cfg.get('公用', {}).get('颗分_粒组划分', {})
+    _kefen_cfg = _common.get('颗分_粒组划分', {}) if isinstance(_common, dict) else {}
     KEFEN_DEDUPE_0075 = True
     if isinstance(_kefen_cfg, dict):
         KEFEN_DEDUPE_0075 = bool(_kefen_cfg.get('0.075mm粒组去重', True))
@@ -130,6 +146,10 @@ def _spt_correction_coefficient(bggc):
     同步强制置空），本函数仅服务于工作库 B类编辑路径（update_spt_raw_and_clear_corrected）。
     """
     if bggc <= 0:
+        return 1.0
+    # V3.0.5（一致性清单 B3 同步）：系数表缺失（TOML 无有效配置）时按不修正处理，
+    # 与桌面端 V3.0.5+ 口径一致（此前 Web 空表会 IndexError，硬编码表则结果分叉）
+    if not _SPT_ROD_LENGTH or not _SPT_COEFF:
         return 1.0
     if bggc <= _SPT_ROD_LENGTH[0]:
         return _SPT_COEFF[0]
@@ -650,16 +670,30 @@ class DataAccess:
 
         result = {}
         # 取值辅助：主字段优先，若为 None 且允许后备则尝试 _ 后缀字段（提出循环，P3）
+        # B4 同步（V3.0.x 桌面口径）：裸 except 收窄为 (ValueError, TypeError)，
+        # 且转换失败写日志（字段名+ZKBH），不再静默吞掉畸形数值
         def _val(r, col, fallback_col=None):
             v = getattr(r, col, None)
             if v is not None:
-                try: return float(v)
-                except: return v
+                try:
+                    value = float(v)
+                    if not math.isfinite(value):
+                        raise ValueError('非有限数值')
+                    return value
+                except (ValueError, TypeError):
+                    _log_error(f'试验数据字段 {col} 数值转换失败，原值={v!r}（钻孔={getattr(r, "ZKBH", "?")}）')
+                    return None
             if fallback_col and has_ext_fields:
                 v2 = getattr(r, fallback_col, None)
                 if v2 is not None:
-                    try: return float(v2)
-                    except: return v2
+                    try:
+                        value = float(v2)
+                        if not math.isfinite(value):
+                            raise ValueError('非有限数值')
+                        return value
+                    except (ValueError, TypeError):
+                        _log_error(f'试验数据后备字段 {fallback_col} 数值转换失败，原值={v2!r}（钻孔={getattr(r, "ZKBH", "?")}）')
+                        return None
             return None
 
         for r in cursor.fetchall():

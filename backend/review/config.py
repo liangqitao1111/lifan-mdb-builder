@@ -19,12 +19,11 @@ LEGACY_DPT_DENSITY_MAP = [
     (10, 20, '中密'), (20, float('inf'), '密实'),
 ]
 LEGACY_SPT_PLASTICITY_A = [
-    (float('-inf'), 3, '流塑'), (4, 5, '软塑'), (6, 15, '可塑'),
-    (16, 20, '硬塑'), (21, float('inf'), '坚硬'),
-]  # 与 工程配置.toml「A类.标贯N_可塑性」键语义完全一致（≤3/4~5/6~15/16~20/≥21），
-# 保留整数边界空隙（(3,4)/(5,6)/(15,16)/(20,21)）——P3-2：修复前 legacy 为连续闭区间
-# 表，TOML 模式下浮点修正击数落入空隙返回 None，回退模式却给"软塑/可塑"等，两模式口径
-# 不一致；现回退表同步留空隙（N=3.5 等同样返回 None，由调用方跳过）
+    (float('-inf'), 3, '流塑'), (3, 5, '软塑'), (5, 15, '可塑'),
+    (15, 20, '硬塑'), (20, float('inf'), '坚硬'),
+]  # 与 工程配置.toml「A类.标贯N_可塑性」对齐（≤3/4~5/6~15/16~20/≥21，半开区间）——
+# 桌面端 V3.1 同步：整数击数键间无空隙，"4~5" 按 [4,6) 半开口径覆盖，N=3.5 落软塑
+# （此前 P3-2 曾留整数空隙 (3,4)/(5,6)，现与桌面端口径统一，两模式判定一致）
 LEGACY_SPT_PLASTICITY_B = [
     (float('-inf'), 2, '流塑'), (2, 8, '软塑'),
     (8, 32, '硬塑'), (32, float('inf'), '坚硬'),
@@ -43,21 +42,85 @@ LEGACY_VERTICAL_THIN_LAYER_DENSE = 1.0
 # TOML → 内部格式 解析工具
 # =============================================================================
 
-def _parse_toml_range(toml_dict):
-    """把 TOML 的 {≤10:松散, 11~15:稍密, ≥31:密实} 转成区间列表 [(lo,hi,state)]
+def _interval_of(text):
+    """把区间文本解析为 (lo, hi)；不是区间文本则返回 None（不抛异常）
 
-    严格按 TOML 键自身语义解析，不做间隙吸收、不改写键语义（复评 P3 修复）：
+    键、值两处共用同一口径（桌面端 V3.0.13 抽出，供「结论=区间」新方向复用）：
+      - `≤10`/`<=10`  → (-∞, 10]（下同，右闭）
+      - `≥31`/`>=31`  → [31, +∞)
+      - `11~15`       → [11, 15]（闭区间）
+      - `>10`         → (10, +∞)
+      - `IL≤0`        → (-∞, 0]
+      - `0<IL≤0.25`   → (0, 0.25]（严格大于侧内缩 2×IL_EPSILON）
+      - `IL>1.0`/`IL≥1.0` → (1.0, +∞)
+      - `IL<0.25`     → (-∞, 0.25)（严格小于侧内缩 2×IL_EPSILON）
+    """
+    k = str(text).strip()
+    if not k:
+        return None
+    try:
+        if k.startswith('≤') or k.startswith('<='):
+            return (float('-inf'), float(k[2:]) if k.startswith('<=') else float(k[1:]))
+        if k.startswith('≥') or k.startswith('>='):
+            return (float(k[2:]) if k.startswith('>=') else float(k[1:]), float('inf'))
+        if '~' in k:
+            parts = k.split('~')
+            if len(parts) != 2:
+                return None
+            return (float(parts[0]), float(parts[1]))
+        if 'IL' in k:
+            # 液性指数形式：IL≤0 / 0<IL≤0.25 / IL>1.0 / IL≥1.0 / IL<0.25（无 '~'）
+            hi_m = re.search(r'([≤<])([\d.]+)$', k)
+            lo_gt_m = re.search(r'^([\d.]+)\s*<', k)       # "0<IL" 严格大于
+            lo_le_m = re.search(r'^([\d.]+)\s*≤', k)      # "0≤IL" 含端点
+            gt_m = re.search(r'[>≥]([\d.]+)$', k)
+            if hi_m:
+                hi = float(hi_m.group(2))
+                if hi_m.group(1) == '<':
+                    hi = hi - 2 * IL_EPSILON              # 严格小于（开边界）
+                if lo_gt_m:
+                    lo = float(lo_gt_m.group(1)) + 2 * IL_EPSILON   # 严格大于
+                elif lo_le_m:
+                    lo = float(lo_le_m.group(1))
+                else:
+                    lo = float('-inf')
+                return (lo, hi)
+            if gt_m:
+                # "IL>1.0"/"IL≥1.0"：> 下限 → (1.0, +∞)（原实现漏解析中文 ≥）
+                return (float(gt_m.group(1)), float('inf'))
+            if lo_gt_m:
+                # 形如 "1.0<IL"（防御写法）：严格大于
+                return (float(lo_gt_m.group(1)) + 2 * IL_EPSILON, float('inf'))
+            if lo_le_m:
+                return (float(lo_le_m.group(1)), float('inf'))
+            return None
+        if k.startswith('>'):
+            return (float(k[1:]), float('inf'))
+    except (ValueError, TypeError):
+        return None
+    return None
+
+
+def _parse_toml_range(toml_dict):
+    """把 TOML 判定对照段转成区间列表 [(lo, hi, state)]
+
+    两种书写方向都支持（桌面端 V3.0.13 起双兼容，Web 同步）：
+      - 旧：`"≤10" = "松散"`       区间作键、结论作值
+      - 新：`"松散" = "≤10"`       结论作键、区间作值（与「手动修正_*值范围」方向统一）
+    判定方式：键不是区间、而值是区间文本时交换二者；两处都不是区间的行跳过。
+
+    严格按区间文本自身语义解析，不做间隙吸收、不改写键语义（复评 P3 修复）：
       - `≤10`/`<=10`  → (-∞, 10]（下同，右闭）
       - `11~15`       → [11, 15]（闭区间）
       - `≥31`/`>=31`  → [31, +∞)
-      - `0<IL≤0.25`   → (0, 0.25]（IL 键专用形式，按两侧不等式边界解析）
+      - `0<IL≤0.25`   → (0, 0.25]（IL 专用形式，按两侧不等式边界解析）
       - `IL≥1.0`/`IL>1.0` → (1.0, +∞)（P1-⑧：原实现漏解析中文 ≥，键被静默丢弃）
       - `IL<0.25`     → (-∞, 0.25)（严格小于，与 `≤0.25` 含端点区分；开边界用
         2×IL_EPSILON 内缩实现，与调用方 `lo-eps < x <= hi+eps` 判定配合）
-    "与上一区间上界的衔接"由 TOML 键本身保证（如 `≤10` + `10~15` + `≥30`）；
-    相邻键之间的间隙不再被静默吸收：间隙内的值不命中任何区间（调用方按 None 安全跳过），
+    "与上一区间上界的衔接"由区间文本本身保证（如 `≤10` + `10~15` + `≥30`）；
+    相邻区间之间的间隙不再被静默吸收：间隙内的值不命中任何区间（调用方按 None 安全跳过），
     避免把显式 `≥31` 静默改写成 >上一区间上界（否则 N=16~30 会被误判）。
-    解析失败的行跳过（防御式）；状态值为 list/dict（用户误写数组）也跳过（P3-16，
+    解析失败的行跳过（防御式）；结论值为 list/dict（用户误写数组）也跳过（P3-16，
     避免 PLASTICITY_ORDER.get(list) 抛 TypeError）。
     """
     result = []
@@ -65,55 +128,20 @@ def _parse_toml_range(toml_dict):
         if k == '用途':
             continue
         if isinstance(v, (list, dict)):
-            continue  # 状态值必须是标量字符串
-        k = k.strip()
-        lo, hi = None, None
-        try:
-            if k.startswith('≤') or k.startswith('<='):
-                lo = float('-inf')
-                hi = float(k[2:]) if k.startswith('<=') else float(k[1:])
-            elif k.startswith('≥') or k.startswith('>='):
-                lo = float(k[2:]) if k.startswith('>=') else float(k[1:])
-                hi = float('inf')
-            elif '~' in k:
-                parts = k.split('~')
-                lo = float(parts[0])
-                hi = float(parts[1])
-            elif 'IL' in k:
-                # 液性指数键形式：IL≤0 / 0<IL≤0.25 / IL>1.0 / IL≥1.0 / IL<0.25（无 '~'）
-                hi_m = re.search(r'([≤<])([\d.]+)$', k)
-                lo_gt_m = re.search(r'^([\d.]+)\s*<', k)       # "0<IL" 严格大于
-                lo_le_m = re.search(r'^([\d.]+)\s*≤', k)      # "0≤IL" 含端点
-                gt_m = re.search(r'[>≥]([\d.]+)$', k)
-                if hi_m:
-                    hi = float(hi_m.group(2))
-                    if hi_m.group(1) == '<':
-                        hi = hi - 2 * IL_EPSILON  # 严格小于（开边界）
-                    if lo_gt_m:
-                        lo = float(lo_gt_m.group(1)) + 2 * IL_EPSILON  # 严格大于
-                    elif lo_le_m:
-                        lo = float(lo_le_m.group(1))
-                    else:
-                        lo = float('-inf')
-                elif gt_m:
-                    # "IL>1.0"/"IL≥1.0"：> 下限 → (1.0, inf)（原实现漏解析中文 ≥）
-                    lo = float(gt_m.group(1))
-                    hi = float('inf')
-                elif lo_gt_m:
-                    # 形如 "1.0<IL"（防御写法）：严格大于
-                    lo = float(lo_gt_m.group(1)) + 2 * IL_EPSILON
-                    hi = float('inf')
-                elif lo_le_m:
-                    lo = float(lo_le_m.group(1))
-                    hi = float('inf')
-            elif k.startswith('>'):
-                lo = float(k[1:])
-                hi = float('inf')
-        except (ValueError, TypeError):
-            continue  # 解析失败的行跳过（防御式）
-        if lo is not None and hi is not None:
-            result.append((lo, hi, v))
-    # 仅按左界排序，不再把左界改写为上一区间上界（间隙保留，严格按键语义）
+            continue  # 结论值必须是标量字符串
+        k = str(k).strip()
+        interval = _interval_of(k)
+        if interval is None and isinstance(v, str):
+            # 方向自适应（桌面端 V3.0.13）：值写成区间文本、键不是区间 → 交换二者，
+            # 使「结论 = 区间」与「区间 = 结论」两种书写都能解析
+            v_interval = _interval_of(v.strip())
+            if v_interval is not None:
+                k, v, interval = v.strip(), k, v_interval
+        if interval is None:
+            continue  # 键、值都不是区间 → 跳过（防御式）
+        lo, hi = interval
+        result.append((lo, hi, v))
+    # 仅按左界排序，不再把左界改写为上一区间上界（间隙保留，严格按语义）
     result.sort(key=lambda x: x[0])
     return result
 
@@ -1141,6 +1169,9 @@ _RULE_DEFAULTS = {
     'R-DEN-007': ('H', '标贯N→可塑性不符'),
     'R-DEN-008': ('H', '标贯N→风化程度不符'),
     'R-DEN-010': ('M', '深部密实度比上层更松（纵向顺序检查）'),
+    # 一致性清单 P0-2：V24 引入的跨层标贯检查此前未注册（无法 TOML 启停），
+    # 现已注册进 _build_rule_registry，此为默认口径（与注册表同源维护）
+    'R-SPT-001': ('H', '标贯深度不在任何地层范围内'),
     'R-CRS-001': ('H', '淤泥不应标注密实度'),
     'R-CRS-010': ('M', '盐渍土应注明含盐量'),
     'R-CRS-011': ('M', '冻土应注明含冰量'),

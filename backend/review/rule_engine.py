@@ -185,6 +185,9 @@ class RuleDef:
     category: str       # 'check' | 'density' | 'cross' | 'plasticity'
     description: str
     check_fn: callable  # 检查函数，接收 ctx dict 参数
+    # 一致性清单 P0-2：整孔级规则标记（R-SPT-001 跨层标贯）——整孔只跑一次、
+    # 在逐层规则之前执行；check_fn 收到的 ctx 携带 all_strata/all_spt 全孔数据
+    whole_hole: bool = False
 
 
 def _layer_label(tczcbh: str, tcycbh: str) -> str:
@@ -261,6 +264,9 @@ class RuleEngine:
             ('R-GRS-001', 'M', 'cross', '颗分定名与地层岩土名称不符', self._grs_grain_size_match),
             # ---- 纵向顺序检查（真实规则函数，注册表统一调度；TOML 启停/等级覆盖在下方绑定） ----
             ('R-DEN-010', 'M', 'density', '深部密实度比上层更松', None),  # fn 在下文按生效等级绑定
+            # ---- 标贯深度完整性（整孔级，whole_hole=True：整孔一次、先于逐层规则） ----
+            # V24 引入但此前未注册（无法 TOML 启停/改等级）；现补注册（一致性清单 P0-2）
+            ('R-SPT-001', 'H', 'spt', '标贯深度不在任何地层范围内', self._check_spt_cross_layer, True),
         ]
 
         # 读取 TOML 规则配置
@@ -287,7 +293,10 @@ class RuleEngine:
         }
 
         result = []
-        for code, level, category, desc, fn in base:
+        for rule in base:
+            code, level, category, desc, fn = rule[:5]
+            # 第 6 位（可选）为整孔级标记：整孔只跑一次、先于逐层规则（如 R-SPT-001）
+            whole_hole = bool(rule[5]) if len(rule) > 5 else False
             # TOML 配置覆盖（id 用 code 直接匹配）
             rc = _rules_cfg.get(code, {})
             if rc.get('启用', _default_enabled) is False:
@@ -299,7 +308,7 @@ class RuleEngine:
                 # 纵向检查：把 TOML 生效等级绑定进真实规则函数，
                 # 注册表统一调度（含启用/禁用），不再 noop 占位 + 反向查找等级
                 fn = (lambda ctx, lv=eff_level: self._den_vertical_check(ctx, lv))
-            result.append(RuleDef(code, eff_level, eff_category, eff_desc, fn))
+            result.append(RuleDef(code, eff_level, eff_category, eff_desc, fn, whole_hole))
         return result
 
     @staticmethod
@@ -358,8 +367,25 @@ class RuleEngine:
             test_data = [{**t, 'qysd': float(t.get('qysd', 0) or 0),
                           'yxzs': float(t.get('yxzs', 0)) if t.get('yxzs') is not None else None} for t in test_data]
         issues = []
-        # V24：跨层标贯异常检查——标贯深度穿越层范围时优先报异常（在逐层击数规则前执行）
-        issues.extend(self._check_spt_cross_layer(strata, spt_data))
+        # 一致性清单 P0-2：R-SPT-001（跨层标贯）已注册进注册表（TOML 可启停/改等级），
+        # 此处不再硬编码调用；整孔级规则在逐层规则之前统一执行
+        # （V24 语义保持：优先级高于标贯击数规则 R-DEN-001/007/008）
+        _whole_ctx = {'all_strata': strata, 'all_spt': spt_data, 'index': -1,
+                      'layer': {}, 'spt': [], 'dpt': [], 'test': []}
+        for rule in self._rules:
+            if not getattr(rule, 'whole_hole', False):
+                continue
+            try:
+                result = rule.check_fn(_whole_ctx)
+            except Exception:
+                # 单规则异常不中断整孔复核（与逐层规则同一防线）
+                get_logger().exception('整孔规则 %s 执行异常，已跳过', rule.rule_id)
+                continue
+            if result:
+                if isinstance(result, list):
+                    issues.extend(result)
+                else:
+                    issues.append(result)
         for i, layer in enumerate(strata):
             depth = layer['tccdsd']
             prev_depth = strata[i - 1]['tccdsd'] if i > 0 else 0
@@ -371,6 +397,8 @@ class RuleEngine:
                    'all_strata': strata, 'all_spt': spt_data}
 
             for rule in self._rules:
+                if getattr(rule, 'whole_hole', False):
+                    continue  # 整孔级规则已在逐层循环前执行，避免每层重复产出
                 try:
                     result = rule.check_fn(ctx)
                 except Exception:
@@ -393,11 +421,14 @@ class RuleEngine:
                            field=field, message=msg,
                            layer_label=_layer_label(layer.get('tczcbh', ''), layer.get('tcycbh', '')))
 
-    def _check_spt_cross_layer(self, strata, spt_data):
+    def _check_spt_cross_layer(self, ctx):
         """V24 跨层标贯异常：标贯记录深度应落在某一地层的 (层顶, 层底] 区间内；
         不在任何层范围（层间空隙 / 超出最浅~最深范围）→ 判定异常。
+        整孔级规则（whole_hole=True）：check_fn 收到的 ctx 携带 all_strata/all_spt，
         优先级高于标贯击数规则（R-DEN-001/007/008）：在逐层规则前执行。"""
         issues = []
+        strata = ctx.get('all_strata') or []
+        spt_data = ctx.get('all_spt') or []
         if not strata or not spt_data:
             return issues
         ranges = []

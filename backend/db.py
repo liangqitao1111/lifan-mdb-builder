@@ -282,6 +282,251 @@ def delete_row(db_path, table, row_id):
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# 批量保存 + 写后回读校验 + 撤销（一致性清单 D2 / D1 / A3-Web 版）
+# ---------------------------------------------------------------------------
+# D1（桌面 verify.SaveVerifier 语义）：写后按主键回读断言生效，浮点容差 0.001，
+# None/''/'None'/'NULL' 等价；任一条失败 → 整体回滚（fail-closed）。
+# D2（桌面 _batch_save_all / _undo 语义）：多操作单事务；服务端每库保留【单层】
+# 撤销栈（对齐桌面单层栈），undo 执行逆操作（update→旧值回写 / insert→删除 /
+# delete→整行快照重插，含显式 row_id）。
+
+_FLOAT_TOL = 0.001
+
+
+def _verify_norm(v):
+    """回读校验值归一化：None/''/'None'/'NULL' 等价空值"""
+    if v is None:
+        return ''
+    s = str(v).strip()
+    if s in ('None', 'NULL', '<NULL>'):
+        return ''
+    return s
+
+
+def _verify_match(expected, actual):
+    """回读比较：空值等价 + 浮点容差（对齐桌面 _values_match）"""
+    exp, act = _verify_norm(expected), _verify_norm(actual)
+    if exp == act:
+        return True
+    try:
+        return abs(float(exp) - float(act)) < _FLOAT_TOL
+    except (ValueError, TypeError):
+        return False
+
+
+def _id_col_of(cols):
+    for x in cols:
+        if x.lower() == "id":
+            return x
+    return None
+
+
+def batch_apply(db_path, ops, verify=True):
+    """单事务执行批量操作 + 写后回读校验，返回 (result_dict, undo_ops)
+
+    op 格式:
+      {"op": "update", "table": t, "row_id": id, "data": {col: val}}
+      {"op": "insert", "table": t, "data": {col: val}}
+      {"op": "delete", "table": t, "row_id": id}
+
+    verify=True 时逐条回读断言（D1）；任一失败整体回滚并返回 failures。
+    undo_ops 为逆操作序列（含快照），调用方存入撤销栈。
+    """
+    conn = conn_for(db_path)
+    applied, undo_ops, failures = 0, [], []
+    try:
+        # 预取快照（update/delete 需要旧值供撤销与校验）
+        snapshots = {}
+        for i, op in enumerate(ops):
+            t = op.get("table") or ""
+            cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{t}")')]
+            if not cols:
+                raise ValueError(f"表不存在: {t}")
+            idc = _id_col_of(cols)
+            if op.get("op") in ("update", "delete") and (not idc or op.get("row_id") is None):
+                raise ValueError(f"op#{i}: {t} 缺 row_id 或无 id 列")
+            if op.get("op") in ("update", "delete"):
+                row = conn.execute(
+                    f'SELECT * FROM "{t}" WHERE "{idc}" = ?',
+                    [op["row_id"]]).fetchone()
+                if row is None:
+                    raise ValueError(f"op#{i}: {t} row_id={op['row_id']} 不存在")
+                snapshots[i] = dict(row)
+            op["_cols"] = cols
+
+        for i, op in enumerate(ops):
+            kind, t, data = op.get("op"), op.get("table") or "", op.get("data") or {}
+            cols = op["_cols"]
+            idc = _id_col_of(cols)
+            writable = {k: v for k, v in data.items() if k in cols and k != idc}
+            if kind == "update":
+                if not writable:
+                    raise ValueError(f"op#{i}: 无可写字段")
+                sets = ", ".join(f'"{k}" = ?' for k in writable)
+                conn.execute(f'UPDATE "{t}" SET {sets} WHERE "{idc}" = ?',
+                             list(writable.values()) + [op["row_id"]])
+                # D1 回读
+                if verify:
+                    row = dict(conn.execute(
+                        f'SELECT * FROM "{t}" WHERE "{idc}" = ?',
+                        [op["row_id"]]).fetchone())
+                    for k, v in writable.items():
+                        if not _verify_match(v, row.get(k)):
+                            failures.append({"op": i, "kind": "update", "table": t,
+                                             "row_id": op["row_id"], "field": k,
+                                             "expected": v, "actual": row.get(k)})
+                undo_ops.append({"op": "update", "table": t, "row_id": op["row_id"],
+                                 "data": {k: snapshots[i].get(k) for k in writable}})
+            elif kind == "insert":
+                if not writable:
+                    raise ValueError(f"op#{i}: 无可写字段")
+                keys = list(writable.keys())
+                cur = conn.execute(
+                    f'INSERT INTO "{t}" ({", ".join(chr(34) + k + chr(34) for k in keys)}) '
+                    f'VALUES ({", ".join("?" for _ in keys)})',
+                    list(writable.values()))
+                new_id = cur.lastrowid
+                if verify:
+                    # INSERT 也必须逐字段回读，不能仅检查“行存在”。这能捕获
+                    # 触发器、类型转换或底层驱动静默改写字段值的情况。
+                    if not idc:
+                        failures.append({"op": i, "kind": "insert", "table": t,
+                                         "expected": "含 id 主键以便回读", "actual": "无 id 列"})
+                    else:
+                        row = conn.execute(
+                            f'SELECT * FROM "{t}" WHERE "{idc}" = ?', [new_id]).fetchone()
+                        if row is None:
+                            failures.append({"op": i, "kind": "insert", "table": t,
+                                             "expected": "新行存在", "actual": "未找到"})
+                        else:
+                            row = dict(row)
+                            for k, v in writable.items():
+                                if not _verify_match(v, row.get(k)):
+                                    failures.append({"op": i, "kind": "insert", "table": t,
+                                                     "row_id": new_id, "field": k,
+                                                     "expected": v, "actual": row.get(k)})
+                undo_ops.append({"op": "delete", "table": t, "row_id": new_id})
+                applied_insert_id = new_id
+            elif kind == "delete":
+                conn.execute(f'DELETE FROM "{t}" WHERE "{idc}" = ?', [op["row_id"]])
+                if verify:
+                    row = conn.execute(
+                        f'SELECT * FROM "{t}" WHERE "{idc}" = ?', [op["row_id"]]).fetchone()
+                    if row is not None:
+                        failures.append({"op": i, "kind": "delete", "table": t,
+                                         "row_id": op["row_id"],
+                                         "expected": "已删除", "actual": "仍存在"})
+                undo_ops.append({"op": "insert", "table": t, "row_id": op["row_id"],
+                                 "data": snapshots[i]})
+            else:
+                raise ValueError(f"op#{i}: 未知操作 {kind!r}")
+            applied += 1
+
+        if failures:
+            conn.rollback()
+            return {"ok": False, "applied": 0, "total": len(ops),
+                    "failures": failures[:20]}, []
+        conn.commit()
+        return {"ok": True, "applied": applied, "total": len(ops)}, undo_ops
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {"ok": False, "applied": 0, "total": len(ops),
+                "error": str(e)}, []
+    finally:
+        conn.close()
+
+
+def apply_undo_ops(db_path, undo_ops, verify=True):
+    """执行逆操作序列（撤销）。undo 中的 insert 按显式 row_id 重插（保持主键稳定）。
+
+    undo_ops 按原批量操作顺序记录，因此撤销必须从最后一项开始，才能处理
+    同一批次中存在依赖关系的更新/删除/插入组合。
+    """
+    conn = conn_for(db_path)
+    applied, failures = 0, []
+    try:
+        for i, op in enumerate(reversed(undo_ops)):
+            kind, t, data = op.get("op"), op.get("table") or "", op.get("data") or {}
+            cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{t}")')]
+            idc = _id_col_of(cols)
+            if kind == "update":
+                writable = {k: v for k, v in data.items() if k in cols and k != idc}
+                if not idc or not writable:
+                    raise ValueError(f"undo op#{i}: update 缺少 id 或可写字段")
+                sets = ", ".join(f'"{k}" = ?' for k in writable)
+                conn.execute(f'UPDATE "{t}" SET {sets} WHERE "{idc}" = ?',
+                             list(writable.values()) + [op["row_id"]])
+                if verify:
+                    row = conn.execute(
+                        f'SELECT * FROM "{t}" WHERE "{idc}" = ?', [op["row_id"]]).fetchone()
+                    if row is None:
+                        failures.append({"op": i, "kind": "update", "table": t,
+                                         "row_id": op["row_id"], "expected": "行存在",
+                                         "actual": "未找到"})
+                    else:
+                        row = dict(row)
+                        for k, v in writable.items():
+                            if not _verify_match(v, row.get(k)):
+                                failures.append({"op": i, "kind": "update", "table": t,
+                                                 "row_id": op["row_id"], "field": k,
+                                                 "expected": v, "actual": row.get(k)})
+            elif kind == "delete":
+                if not idc:
+                    raise ValueError(f"undo op#{i}: delete 缺少 id 列")
+                conn.execute(f'DELETE FROM "{t}" WHERE "{idc}" = ?', [op["row_id"]])
+                if verify:
+                    row = conn.execute(
+                        f'SELECT 1 FROM "{t}" WHERE "{idc}" = ?', [op["row_id"]]).fetchone()
+                    if row is not None:
+                        failures.append({"op": i, "kind": "delete", "table": t,
+                                         "row_id": op["row_id"], "expected": "已删除",
+                                         "actual": "仍存在"})
+            elif kind == "insert":
+                # 逆 delete：整行快照重插（显式 id，保持主键/引用稳定）
+                writable = {k: v for k, v in data.items() if k in cols}
+                if not idc or not writable:
+                    raise ValueError(f"undo op#{i}: insert 缺少 id 或字段")
+                keys = list(writable.keys())
+                conn.execute(
+                    f'INSERT INTO "{t}" ({", ".join(chr(34) + k + chr(34) for k in keys)}) '
+                    f'VALUES ({", ".join("?" for _ in keys)})',
+                    list(writable.values()))
+                if verify:
+                    row = conn.execute(
+                        f'SELECT * FROM "{t}" WHERE "{idc}" = ?', [op.get("row_id")]).fetchone()
+                    if row is None:
+                        failures.append({"op": i, "kind": "insert", "table": t,
+                                         "row_id": op.get("row_id"), "expected": "行存在",
+                                         "actual": "未找到"})
+                    else:
+                        row = dict(row)
+                        for k, v in writable.items():
+                            if not _verify_match(v, row.get(k)):
+                                failures.append({"op": i, "kind": "insert", "table": t,
+                                                 "row_id": op.get("row_id"), "field": k,
+                                                 "expected": v, "actual": row.get(k)})
+            else:
+                raise ValueError(f"undo op#{i}: 未知操作 {kind!r}")
+            applied += 1
+        if failures:
+            conn.rollback()
+            return {"ok": False, "applied": 0, "failures": failures}
+        conn.commit()
+        return {"ok": True, "applied": applied}
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return {"ok": False, "applied": 0, "error": str(e)}
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     # 自检：用示例 .lz 导入并导出 schema v2
     import tempfile

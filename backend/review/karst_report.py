@@ -1,6 +1,13 @@
 """理反 — 岩溶统计报告生成模块
 从 MDB 数据直接生成附表7/8，复刻 V1.4.9.1 输出格式。
 Lifan 直接 import 调用，无需 subprocess。
+
+一致性清单 A2 同步（桌面 V3.1.11《9月新版表头脚本.py》，2026.09）：
+generate_karst_report(da, out_dir, header_version='new')
+  - 'new' → 新表头 岩溶发育统计表（15列 A-O，参数/溶洞统计模板（新）.xlsx），
+            输出文件名"岩溶发育统计表（新表头）.xlsx"
+  - 'old' → 旧表头 附表7 岩溶率统计表（20列，与原版完全一致）
+附表8 溶洞统计表两种模式均照常输出。
 """
 import os, re
 from collections import OrderedDict
@@ -301,7 +308,10 @@ def _build_cave_stats(da):
             bottom = s.get('tccdsd', 0)
             # V2.2.2 K1：厚度口径与附表7 统一——tchd 缺失/为 0 时回退 bottom-prev_depth
             # （以溶洞记录行存在为准），附表8 与附表7 条数不再不一致
-            thick = s.get('tchd', 0) or (bottom - prev_depth)
+            thick_raw = s.get('tchd')
+            # P2-5（Codex 复核）：tchd 显式 0 = 零厚溶洞行 → 剔除（thick>0 过滤生效）；
+            # 仅当 tchd 缺失（None）时才回退 bottom-prev 厚度口径
+            thick = thick_raw if thick_raw is not None else (bottom - prev_depth)
             if name in CAVE_TYPES and thick > 0:
                 top = bottom - thick
                 caves.append({'name': name, 'height': thick, 'depth': top,
@@ -359,8 +369,13 @@ def _pier_sort_key(name):
 # ============================================================
 # 主处理流程
 # ============================================================
-def generate_karst_report(da, out_dir):
-    """生成附表7和附表8，返回 (table7_path, table8_path)"""
+def generate_karst_report(da, out_dir, header_version='new'):
+    """生成岩溶统计表和附表8，返回 (table_path, table8_path)
+
+    一致性清单 A2（桌面 V3.1.11 三选一弹窗的 Web 实现）：
+    header_version='new'（默认）：新表头 岩溶发育统计表（15列，溶洞统计模板（新）.xlsx）
+    header_version='old'：旧表头 附表7 岩溶率统计表（与原版完全一致）
+    """
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, Side, Border
 
@@ -390,7 +405,10 @@ def generate_karst_report(da, out_dir):
         for s in strata:
             name = s.get('tcymc', '')
             bottom = s.get('tccdsd', 0)
-            thick = s.get('tchd', 0) or (bottom - prev_depth)
+            thick_raw = s.get('tchd')
+            # P2-5（Codex 复核）：tchd 显式 0 = 零厚溶洞行 → 剔除（thick>0 过滤生效）；
+            # 仅当 tchd 缺失（None）时才回退 bottom-prev 厚度口径
+            thick = thick_raw if thick_raw is not None else (bottom - prev_depth)
 
             if name in SOLUBLE_ROCK_TYPES:
                 soluble_thick += thick
@@ -513,9 +531,14 @@ def generate_karst_report(da, out_dir):
         pier_cave_hole_rates[pier] = round(cave_count / total * 100, 1) if total > 0 else 0
         pier_development[pier] = judge_development(pier_rates[pier], pier_cave_hole_rates[pier])
 
-    # ---- 4. 写附表7 ----
-    table7_path = os.path.join(out_dir, '附表7 岩溶率统计表.xlsx')
-    _write_table7(output_rows, pier_rates, pier_cave_hole_rates, pier_development, table7_path)
+    # ---- 4. 写主表（新表头 / 旧表头 二选一；数据行构造与校验口径完全相同）----
+    # A2：与桌面 V3.1.11 _ask_karst_header_version 三选一弹窗对齐（Web 经 API 参数传入）
+    if header_version == 'new':
+        table7_path = os.path.join(out_dir, '岩溶发育统计表（新表头）.xlsx')
+        _write_table7_new(output_rows, table7_path)
+    else:
+        table7_path = os.path.join(out_dir, '附表7 岩溶率统计表.xlsx')
+        _write_table7(output_rows, pier_rates, pier_cave_hole_rates, pier_development, table7_path)
 
     # ---- 5. 构建溶洞统计数据并写附表8 ----
     cave_stats = _build_cave_stats(da)
@@ -530,7 +553,7 @@ def _write_table7(rows, pier_rates, pier_cave_hole_rates, pier_development, path
     import openpyxl
     from openpyxl.styles import Font, Alignment, Side, Border
 
-    # 加载模板
+    # 加载模板（Web 适配：backend/review/ → 仓库根为三级 dirname）
     base = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     template_path = os.path.join(base, '参数', '岩溶率统计表.xlsx')
     if not os.path.exists(template_path):
@@ -823,6 +846,181 @@ def _write_table7_fallback(rows, pier_rates, pier_cave_hole_rates, pier_developm
 
     # 数据行高固定为 25
     for r in range(4, ws.max_row + 1):
+        ws.row_dimensions[r].height = 25
+
+    wb.save(path)
+
+
+# ============================================================
+# V2026.09 新增（一致性清单 A2，自桌面 9月新版表头脚本.py 移植）：
+# 新表头 岩溶发育统计表（15列 A-O）
+# 数据来源/取值/排序/校验与旧版 _write_table7 完全一致，仅列映射与
+# 合并规则按新表头重排；删除列：溶洞累计厚度/墩台线岩溶率/钻孔见洞率/
+# 墩台岩溶发育程度/原始描述；新增列：覆盖层厚度（沿用旧版"基岩埋深"口径，
+# 即首个可溶岩顶面埋深）。
+# ============================================================
+TPL_COL_NEW = {
+    '墩台号': 1,           # A 墩台编号
+    '钻孔编号': 2,         # B
+    '里程': 3,             # C
+    '偏移量': 4,           # D
+    '地面标高': 5,         # E 孔口标高（m）
+    '孔深': 6,             # F 钻孔深度（m）
+    '基岩埋深': 7,         # G 覆盖层厚度（m）
+    '溶洞顶板深度': 8,     # H 岩溶埋深(m)-洞顶
+    '溶洞底板深度': 9,     # I 岩溶埋深(m)-洞底
+    '溶洞顶板高程': 10,    # J 溶洞标高(m)-洞顶
+    '溶洞底板高程': 11,    # K 溶洞标高(m)-洞底
+    '可溶岩累计厚度': 12,  # L 可溶岩（含溶洞）总进尺（m）
+    '溶洞高度': 13,        # M
+    '线岩溶率': 14,        # N 钻孔线岩溶率（%）
+    '溶洞充填物特征': 15,  # O
+}
+
+
+def _build_table7_new_header_fallback():
+    """新模板文件缺失时，硬编码复刻新表头（15列 A-O），返回 (wb, ws)"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Side, Border
+
+    wb = Workbook(); ws = wb.active; ws.title = '岩溶发育统计表'
+
+    title_font = Font(name='宋体', size=22, bold=True)
+    hdr_font = Font(name='宋体', size=11, bold=True)
+    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    center_nw = Alignment(horizontal='center', vertical='center', wrap_text=False)
+    thin = Side(style='thin')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # 第1行：标题
+    ws.merge_cells('A1:O1')
+    c = ws['A1']; c.value = '附表X  ×××××特大桥 岩溶发育统计表'
+    c.font = title_font; c.alignment = center_nw; c.border = border
+
+    # 第2行：主表头（B-G、L、M、N、O 纵向合并 2-3 行；H/I、J/K 横向合并）
+    r2 = {'A': '墩台\n编号', 'B': '钻孔编号', 'C': '里程', 'D': '偏移量',
+          'E': '孔口标高\n（m）', 'F': '钻孔深度（m）', 'G': '覆盖层厚度\n（m）',
+          'H': '岩溶埋深(m)', 'J': '溶洞标高(m)',
+          'L': '可溶岩（含溶洞）总进尺（m）', 'M': '溶洞高度\n（m）',
+          'N': '钻孔线岩溶率\n（%）', 'O': '溶洞充填物特征'}
+    for ref, val in r2.items():
+        c = ws[ref + '2']; c.value = val; c.font = hdr_font; c.alignment = center; c.border = border
+        ws.merge_cells(ref + '2:' + ref + '3')
+    ws.merge_cells('H2:I2'); ws.merge_cells('J2:K2')
+
+    # 第3行：子表头
+    r3 = {'H': '洞顶', 'I': '洞底', 'J': '洞顶', 'K': '洞底'}
+    for ref, val in r3.items():
+        c = ws[ref + '3']; c.value = val; c.font = hdr_font; c.alignment = center; c.border = border
+
+    ws.row_dimensions[1].height = 41
+    ws.row_dimensions[2].height = 27
+    ws.row_dimensions[3].height = 27
+    return wb, ws
+
+
+def _write_table7_new(rows, path):
+    """写入新表头 岩溶发育统计表（使用 参数/溶洞统计模板（新）.xlsx，15列 A-O）
+
+    填写要求与校验规则完全沿用旧版：
+      - 排序：按墩台分组升序 → 组内按钻孔号升序 → 同钻孔溶洞行紧邻（洞顶深度升序）
+      - 数字两位小数；线岩溶率为百分比数值（×100，一位小数，'0.0' 格式）
+      - 合并：A 墩台级；B-G 钻孔级；L/N 钻孔级；溶洞级列（H-K/M/O）不合并
+    """
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Side, Border
+
+    # Web 适配：backend/review/ → 仓库根为三级 dirname（桌面端为二级）
+    base = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    template_path = os.path.join(base, '参数', '溶洞统计模板（新）.xlsx')
+    if os.path.exists(template_path):
+        wb = openpyxl.load_workbook(template_path)
+        ws = wb.active
+        # 删除模板原有数据行（若有），保留表头（第1-3行）
+        for mc in list(ws.merged_cells.ranges):
+            if mc.min_row >= 4:
+                ws.unmerge_cells(str(mc))
+        if ws.max_row >= 4:
+            ws.delete_rows(4, ws.max_row - 3)
+    else:
+        wb, ws = _build_table7_new_header_fallback()
+
+    data_font = Font(name='宋体', size=11)
+    center = Alignment(horizontal='center', vertical='center', wrap_text=False)
+    thin = Side(style='thin')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # 按墩台分组排序（与旧版 _write_table7 完全一致的规则）
+    pier_groups = OrderedDict()
+    current_pier = None
+    for row_data in rows:
+        p = row_data.get('墩台号')
+        if p is not None: current_pier = p
+        if current_pier not in pier_groups: pier_groups[current_pier] = []
+        pier_groups[current_pier].append(row_data)
+    for pier_name, group_rows in pier_groups.items():
+        effective = {}
+        prev_k = None
+        for orig_idx in range(len(group_rows)):
+            r = group_rows[orig_idx]
+            k = r.get('钻孔编号') or prev_k
+            effective[orig_idx] = k
+            if r.get('钻孔编号'):
+                prev_k = r['钻孔编号']
+        indexed = list(enumerate(group_rows))
+        indexed.sort(key=lambda t: (_pier_sort_key(effective[t[0]] or ''), t[0]))
+        pier_groups[pier_name] = [r for _, r in indexed]
+    sorted_rows = []
+    for pier_name in sorted(pier_groups.keys(), key=_pier_sort_key):
+        sorted_rows.extend(pier_groups[pier_name])
+
+    erow = 4
+    num2_fmt = '0.00'
+    pct_val_fmt = '0.0'   # N列：百分比数值（×100，一位小数），与旧版 O 列口径一致
+    NUM2_KEYS = {'里程', '偏移量', '地面标高', '孔深', '基岩埋深',
+                  '溶洞顶板深度', '溶洞底板深度', '溶洞顶板高程', '溶洞底板高程',
+                  '可溶岩累计厚度', '溶洞高度'}
+
+    data_row_map = {}
+    for r_idx, row_data in enumerate(sorted_rows):
+        data_row_map[r_idx] = erow
+        for data_key, col_idx in TPL_COL_NEW.items():
+            val = row_data.get(data_key)
+            if val is None:
+                continue
+            c = ws.cell(row=erow, column=col_idx, value=val)
+            c.font = data_font; c.alignment = center; c.border = border
+            if data_key in NUM2_KEYS and isinstance(val, (int, float)):
+                c.number_format = num2_fmt
+            elif data_key == '线岩溶率' and isinstance(val, (int, float)):
+                c.number_format = pct_val_fmt
+        erow += 1
+
+    total_rows = erow - 1
+
+    # 合并单元格：A 墩台级；B-G + L + N 钻孔级
+    def _merge(rows_list, key_fn, cols):
+        prev_k, start = None, None
+        for ri, rd in enumerate(rows_list):
+            er = data_row_map[ri]; k = key_fn(rd)
+            if k is not None and k != prev_k:
+                if prev_k is not None and start is not None and er - 1 >= start:
+                    for mc in cols: ws.merge_cells(start_row=start, start_column=mc, end_row=er - 1, end_column=mc)
+                prev_k, start = k, er
+        if prev_k is not None and start is not None and total_rows >= start:
+            for mc in cols: ws.merge_cells(start_row=start, start_column=mc, end_row=total_rows, end_column=mc)
+
+    _merge(sorted_rows, lambda rd: rd.get('墩台号'), [1])                    # A: 墩台编号
+    _merge(sorted_rows, lambda rd: rd.get('钻孔编号'), [2, 3, 4, 5, 6, 7])   # B-G: 钻孔级
+    _merge(sorted_rows, lambda rd: rd.get('钻孔编号'), [12, 14])             # L/N: 钻孔级
+
+    # 数据区域全部绘制框线（含被合并隐藏的单元格，15列）
+    for r in range(4, total_rows + 1):
+        for c in range(1, 16):
+            ws.cell(row=r, column=c).border = border
+
+    # 数据行高固定为 25
+    for r in range(4, total_rows + 1):
         ws.row_dimensions[r].height = 25
 
     wb.save(path)

@@ -19,16 +19,23 @@ fi
 
 echo "=== 2/4 检查 .env ==="
 if [ ! -f .env ]; then
-  echo "生成 .env 模板（请编辑填入 GH_TOKEN / ADMIN_PASS / AUTH_SECRET）"
+  echo "生成 .env 模板（已随机生成管理员密码和鉴权密钥，请妥善保存）"
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "未找到 openssl，无法安全生成初始密钥；请安装 openssl 后重试"
+    exit 1
+  fi
+  generated_pass="$(openssl rand -hex 24)"
+  generated_secret="$(openssl rand -hex 32)"
   cat > .env <<'EOF'
 # GitHub PAT（生成 MDB 必需，Actions+Contents 权限）
 GH_TOKEN=
-# 登录凭据（生产务必修改默认 admin/admin）
+# 登录凭据（首次启动已随机生成密码）
 ADMIN_USER=admin
-ADMIN_PASS=admin
-# 鉴权签名密钥（生产务必设置随机值，如 openssl rand -hex 32）
-AUTH_SECRET=change-me-in-production
+ADMIN_PASS=__GENERATED_PASS__
+# 鉴权签名密钥（随机值，勿提交到版本库）
+AUTH_SECRET=__GENERATED_SECRET__
 EOF
+  sed -i "s/__GENERATED_PASS__/${generated_pass}/; s/__GENERATED_SECRET__/${generated_secret}/" .env
   echo "已生成 .env —— 请编辑后重新运行本脚本"
   exit 1
 fi

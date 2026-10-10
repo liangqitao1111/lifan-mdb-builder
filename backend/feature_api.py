@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "review"))
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -71,7 +71,7 @@ class SptApplyItem(BaseModel):
 
 
 @router.post("/spt-apply")
-def spt_apply(db_id: str, payload: dict):
+def spt_apply(db_id: str, payload: dict, request: Request = None):
     """将标贯修正建议写回工作库。
     density/weathering → BGJS 更新；plasticity（R-DEN-007）→ 该标贯深度所在层 TCKSX 状态写回。
     """
@@ -79,11 +79,12 @@ def spt_apply(db_id: str, payload: dict):
     if not items:
         raise HTTPException(400, "缺少 items")
     import sqlite3
+    import db as wdb
     path = _db_path(db_id)
     conn = sqlite3.connect(path)
-    updated = 0
-    n_updated = 0
-    s_updated = 0
+    ops = []
+    n_candidates = 0
+    s_candidates = 0
     try:
         for it in items:
             if it.issue_type == "plasticity" and it.expected_state:
@@ -104,25 +105,45 @@ def spt_apply(db_id: str, payload: dict):
                         break
                     prev_depth = depth
                 if target_id is not None:
-                    cur = conn.execute(
-                        "UPDATE [z_g_TuCeng] SET TCKSX = ? WHERE id = ?",
-                        (it.expected_state, target_id))
-                    s_updated += cur.rowcount
+                    ops.append({"op": "update", "table": "z_g_TuCeng",
+                                "row_id": target_id,
+                                "data": {"TCKSX": it.expected_state}})
+                    s_candidates += 1
                 else:
                     # 深度不在任何层区间（跨层/超深）：跳过，不静默写错层
                     continue
             else:
                 # P2-5 浮点容差：BGDSD 为 REAL 存储，前端传 3 位小数，
                 # 精确等值可能 miss（如 5.1000000000000005 vs 5.1）
-                cur = conn.execute(
-                    "UPDATE [z_y_BiaoGuan] SET BGJS = ? WHERE ZKBH = ? AND ABS(BGDSD - ?) < 0.005",
-                    (float(it.new_n), it.zkbh, float(it.bgdsd)))
-                n_updated += cur.rowcount
-            updated += cur.rowcount
-        conn.commit()
+                rows = conn.execute(
+                    "SELECT id FROM [z_y_BiaoGuan] WHERE ZKBH = ? AND ABS(BGDSD - ?) < 0.005",
+                    (it.zkbh, float(it.bgdsd))).fetchall()
+                for (row_id,) in rows:
+                    ops.append({"op": "update", "table": "z_y_BiaoGuan",
+                                "row_id": row_id,
+                                "data": {"BGJS": float(it.new_n)}})
+                    n_candidates += 1
     finally:
         conn.close()
-    return {"ok": True, "updated": updated, "n_updated": n_updated, "s_updated": s_updated, "total": len(items)}
+
+    # 标贯应用与工作台批量编辑共享同一事务、逐字段回读和单层撤销语义。
+    # 没有匹配行时保持已有撤销记录，不把“空操作”写入栈。
+    if not ops:
+        return {"ok": True, "updated": 0, "n_updated": 0,
+                "s_updated": 0, "total": len(items), "applied": 0}
+    result, undo_ops = wdb.batch_apply(path, ops, verify=True)
+    if not result.get("ok"):
+        raise HTTPException(422, f"标贯写回失败: {result.get('error') or result.get('failures')}")
+
+    # feature_api 由 main 挂载，运行时导入可避免模块初始化循环；写库成功但
+    # 撤销栈登记失败时必须让请求失败，避免界面误报“可撤销”而实际无法恢复。
+    import main as _main
+    key = _main._undo_key(db_id, request)
+    with _main._UNDO_STACKS_LOCK:
+        _main._UNDO_STACKS[key] = undo_ops
+    return {"ok": True, "updated": result.get("applied", 0),
+            "n_updated": n_candidates, "s_updated": s_candidates,
+            "total": len(items), "applied": result.get("applied", 0)}
 
 
 # ---------- 2) 动探杆长修正 ----------

@@ -64,17 +64,21 @@ def _make_block_name(tczcbh, tcycbh):
     return main, main
 
 
-def generate_profile(da, zkbh_list, output_path, group_interval=3,
-                     block_template=None, draw_cave=True, draw_label=True,
-                     draw_label_text=True,
-                     h_scale=500, v_scale=500):
+def generate_profile(da, zkbh_list, output_path, group_interval=None,
+                     block_template=None, draw_cave=None, draw_label=None,
+                     draw_label_text=None,
+                     h_scale=None, v_scale=None):
     """ 生成纵断面 DXF 文件
     Args:
-        h_scale: 横比例 1:N（默认500 即 1:500）
-        v_scale: 纵比例 1:N（默认500 即 1:500）
-        draw_cave: 是否绘制溶洞线
-        draw_label: 是否生成地层编号块
-        draw_label_text: 是否生成地层编号文字
+        group_interval: 贴块组间隔 1–20（None → TOML「贴块组间隔」，缺省 3）
+        h_scale: 横比例 1:N（None → TOML「横比例」，缺省 500 即 1:500）
+        v_scale: 纵比例 1:N（None → TOML「纵比例」，缺省 500 即 1:500）
+        draw_cave: 是否绘制溶洞线（None → TOML「绘制溶洞」，缺省 true）
+        draw_label: 是否生成地层编号块（None → TOML「地层编号」，缺省 true）
+        draw_label_text: 是否生成地层编号文字（None → TOML「地层编号文字」，缺省 true）
+
+    一致性清单 P2-7（C1/C2/C3）：以上参数此前仅能经 API 显式传入，端点默认值
+    写死覆盖一切 → TOML 扩键后统一改为 None 回退 TOML，参数中心改键即时生效。
     """
 
     if not zkbh_list:
@@ -90,6 +94,46 @@ def generate_profile(da, zkbh_list, output_path, group_interval=3,
     TEXT_HEIGHT = float(_pf_cfg.get('文字高度', TEXT_HEIGHT))
     N_SEG = int(_pf_cfg.get('溶洞分段数', N_SEG))
     CAVE_LTYPE = str(_pf_cfg.get('溶洞线型名', CAVE_LTYPE))
+    # C1/C2/C3：调用方未显式传参（None）时回退 TOML，仍缺省用桌面默认
+    def _cfg_int(key, default, lo, hi):
+        try:
+            value = int(_pf_cfg.get(key, default) or default)
+        except (TypeError, ValueError, OverflowError):
+            return default
+        return value if lo <= value <= hi else default
+
+    def _cfg_bool(key, default):
+        value = _pf_cfg.get(key, default)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            if value.strip().lower() in ('true', '1', 'yes', 'on'):
+                return True
+            if value.strip().lower() in ('false', '0', 'no', 'off'):
+                return False
+        return default
+
+    if group_interval is None:
+        group_interval = _cfg_int('贴块组间隔', 3, 1, 20)
+    if h_scale is None:
+        h_scale = _cfg_int('横比例', 500, 100, 10000)
+    if v_scale is None:
+        v_scale = _cfg_int('纵比例', 500, 100, 10000)
+    if draw_cave is None:
+        draw_cave = _cfg_bool('绘制溶洞', True)
+    if draw_label is None:
+        draw_label = _cfg_bool('地层编号', True)
+    if draw_label_text is None:
+        draw_label_text = _cfg_bool('地层编号文字', True)
+
+    # 配置文件也可能由参数中心编辑，不能只依赖 API 查询参数校验。
+    # 这些边界同时保证后续除法和 range() 始终有定义。
+    if isinstance(group_interval, bool) or not isinstance(group_interval, int) or not 1 <= group_interval <= 20:
+        raise ValueError("贴块组间隔必须在 1 到 20 之间")
+    if isinstance(h_scale, bool) or not isinstance(h_scale, int) or not 100 <= h_scale <= 10000:
+        raise ValueError("横比例必须在 100 到 10000 之间")
+    if isinstance(v_scale, bool) or not isinstance(v_scale, int) or not 100 <= v_scale <= 10000:
+        raise ValueError("纵比例必须在 100 到 10000 之间")
 
     # ---- 1. 加载数据 ----
     all_bh = {b['zkbh']: b for b in da.get_all_boreholes() if b['zkbh'] in zkbh_list}

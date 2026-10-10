@@ -7,11 +7,64 @@
   ② 范围钳位 — clamp(参照值, min_n, max_n)
   ③ 无参照兜底 — 取 min_n
   ④ 深度趋势 — 同孔同层内 N_深 ≥ N_浅（不降，确定性 +1，保证结果可复现）
+
+与桌面端 V3.1.11（模块/spt_corrector.py, 7b0d8c0）同步：
+  - B1 修复：可塑性（R-DEN-007）建议值按【层位标注塑性状态】的 N 范围修正击数
+    （compute_plasticity_suggestions），不再 new_n=old_n 仅改状态标注（旧策略已
+    停用保留为 compute_clay_corrections）。
+  - B2 修复：TOML 试验指标_统计.N 坏值防御（_safe_int 容 "5.5"/None）+
+    计算失败写日志（applog），不再静默吞掉。
+Web 适配：日志走 applog（RotatingFileHandler），不落 review 包目录。
 """
 
 from dataclasses import dataclass, field
+import os, datetime
 
+# V3.0.7 修复：scan_all() 内直接调用 load_project_config()，但此前该名字只在
+# _load_plasticity_ranges() 内做局部导入，导致 scan_all 每次走到建议值计算时
+# 抛 NameError（被 except 吞掉并记日志）——后果是**密实度/风化问题的建议 N 值
+# 从未真正重算**，前端一律显示"无需修正"。此处提为模块级导入。
 from config import load_project_config
+from applog import log_error
+
+
+# 可塑性 N 修正范围默认表（与 spt_dialog._FALLBACK_RANGES 保持一致；TOML 优先）
+# V3.0.6（神舟确认）：可塑性问题（R-DEN-007）的建议值改为【按层位标注的塑性状态
+# 修正击数】——旧逻辑 new_n=old_n（仅改状态标注、N 不动）不符合实际复核习惯：
+# 塑性状态标注通常正确（参数表/IL 已核），应把击数修进该状态对应的 N 范围
+# （A类：软塑4~7 / 可塑8~14 / 硬塑15~30；B类：软塑3~8 / 硬塑9~32）。
+_PLASTICITY_RANGES_A = {'流塑': (0, 3), '软塑': (4, 7), '可塑': (8, 14), '硬塑': (15, 30), '坚硬': (31, 200)}
+_PLASTICITY_RANGES_B = {'流塑': (0, 2), '软塑': (3, 8), '硬塑': (9, 32), '坚硬': (33, 200)}
+
+
+def _load_plasticity_ranges(proj_type):
+    """优先读 TOML「手动修正_可塑性N值范围」，缺失/解析失败回退默认表"""
+    try:
+        from config import load_project_config
+        cfg = load_project_config()
+        raw = (cfg.get('A类' if proj_type == 'A' else 'B类', {})
+                .get('手动修正_可塑性N值范围', {}) or {})
+        parsed = {}
+        for k, v in raw.items():
+            if isinstance(v, dict) and '最小' in v and '最大' in v:
+                parsed[k] = (int(v['最小']), int(v['最大']))
+        if parsed:
+            return parsed
+    except Exception:
+        pass
+    return dict(_PLASTICITY_RANGES_A if proj_type == 'A' else _PLASTICITY_RANGES_B)
+
+
+def _log_error(msg):
+    """将错误写入日志（静默，与 dao._log_error 同款约定）。
+
+    Web 适配：改走 applog（%APPDATA%/lifan/logs，带 5MB×5 轮转），
+    避免容器内 review 包目录只读时丢日志；函数名保留以兼容桌面同款调用点。
+    """
+    try:
+        log_error(f'[spt_corrector] {msg}')
+    except Exception:
+        pass
 
 
 @dataclass
@@ -72,14 +125,22 @@ class SptCorrector:
             for sug in entry['suggestions']:
                 global_pairs.extend(sug.ref_depth_n)
             entry['global_ref_depth_n'] = sorted(global_pairs, key=lambda x: x[0]) if global_pairs else []
-            # v23 修复：此前未调用 compute_suggestions，new_n 恒等于 old_n（前端显示 "2 → 2" 的根因）。
-            # 分类计算：密实度/风化（R-DEN-001/008）→ N 值修正（深度插值+钳位+趋势）；
-            #           可塑性（R-DEN-007）→ 状态修正（compute_clay_corrections：N 不变，改 old_state→expected_state）。
+            # v23 移植（Web）：此前未调用 compute_suggestions，new_n 恒等于 old_n
+            # （前端显示 '2 → 2' 的根因）；分类计算：密实度/风化 → N 值修正（深度插值+
+            # 钳位+趋势）；可塑性（R-DEN-007）→ 按层位标注塑性状态的 N 范围修正击数
+            # （V3.0.6 起 compute_plasticity_suggestions，不再 new_n=old_n）
             try:
                 _cfg = load_project_config()
                 _stat_n = _cfg.get('试验指标_统计', {}).get('N', {})
-                _min_n = int(_stat_n.get('最小', 0) or 0)
-                _max_n = int(_stat_n.get('最大', 200) or 200)
+                # P2-4（Codex 复核）：配置坏值（如 "5.5"/None/非数值）防御——
+                # 此前 int('5.5') 抛 ValueError 被整体吞掉，用户误以为无需修正
+                def _safe_int(v, default):
+                    try:
+                        return int(float(v))  # "5.5" → 5（钳位取下限语义）
+                    except (TypeError, ValueError):
+                        return default
+                _min_n = _safe_int(_stat_n.get('最小', 0) or 0, 0)
+                _max_n = _safe_int(_stat_n.get('最大', 200) or 200, 200)
                 if _min_n < 1: _min_n = 1   # 击数下限至少 1（0 仅统计允许）
                 _dens = [s for s in entry['suggestions'] if getattr(s, 'issue_type', '') != 'plasticity']
                 _clay = [s for s in entry['suggestions'] if getattr(s, 'issue_type', '') == 'plasticity']
@@ -87,10 +148,13 @@ class SptCorrector:
                     self.compute_suggestions(_dens, _min_n, _max_n,
                                              global_ref_depth_n=entry['global_ref_depth_n'])
                 if _clay:
-                    self.compute_clay_corrections(_clay)
+                    # V3.0.6（神舟确认）：可塑性问题建议值按【层位标注塑性状态】的
+                    # N 范围修正击数（不再 new_n=old_n 仅改状态标注）
+                    self.compute_plasticity_suggestions(_clay, entry)
             except Exception:
-                # 计算失败不阻断扫描：保留 old_n，前端会显示 "无需修正" 语义
-                pass
+                # 计算失败不阻断扫描：保留 old_n，前端会显示 '无需修正' 语义
+                import traceback as _tb
+                _log_error(f'scan_all 计算建议失败（层 {entry.get("layer_label", "?")}）: {_tb.format_exc()}')
         return result
 
     def _collect_issues(self, zkbh, strata, spt_data, issues, layers_map, rule_id):
@@ -236,10 +300,28 @@ class SptCorrector:
 
         return sorted_sugs
 
+    def compute_plasticity_suggestions(self, suggestions, entry):
+        """V3.0.6：可塑性（R-DEN-007）建议N值 — 按层位标注塑性状态的N值范围修正击数
+
+        流程与密实度/风化一致（本孔参照插值 → 范围钳位 → 深度趋势），
+        仅范围来源不同：取「手动修正_可塑性N值范围」中该层标注状态（如硬塑 15~30）。
+        """
+        proj_type = getattr(self.engine, 'project_type', 'A')
+        ranges = _load_plasticity_ranges(proj_type)
+        state = (entry.get('plasticity') or '').strip()
+        lo, hi = ranges.get(state, (5, 50))
+        if lo >= hi:
+            lo, hi = 1, 50
+        return self.compute_suggestions(
+            suggestions, lo, hi, True,
+            global_ref_depth_n=entry.get('global_ref_depth_n', []))
+
     @staticmethod
     def compute_clay_corrections(suggestions):
-        """对黏性土标贯-可塑性不匹配的修正建议：将 new_n 设为应修正的可塑性状态键
-        用户可选择自动修正（将所有条目的 old_state 改为 expected_state）
+        """【已停用，保留兼容】旧可塑性修正策略：new_n=old_n（仅改状态标注，N 不动）。
+
+        V3.0.6 起默认改走 compute_plasticity_suggestions（按状态范围修击数）；
+        如需恢复旧行为，把 scan_all 中的 compute_plasticity_suggestions 换回本方法即可。
         """
         for sug in suggestions:
             sug.new_n = sug.old_n  # N值不变

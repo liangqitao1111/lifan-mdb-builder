@@ -109,6 +109,10 @@ def _load_boreholes(da) -> List[Dict[str, Any]]:
 
 
 def _group_intervals(bhs: List[Dict], interval: int = INTERVAL) -> List[Dict]:
+    if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+        raise ValueError("里程间隔必须是数字")
+    if interval < 100 or interval > 2000:
+        raise ValueError("里程间隔必须在 100 到 2000 之间")
     if not bhs:
         return []
     current_start = int(min(b['zklc'] for b in bhs))
@@ -360,13 +364,25 @@ def generate_columns(da, output_path: str, interval: int = None,
     global COL_HEIGHT, COL_WIDTH, DEPTH_SCALE, INTERVAL, MAX_DEPTH, SPACING, \
         MIN_THICKNESS, MIN_SAMPLE_THICKNESS, STRATA_NAME_MAP
     _cfg = load_project_config().get('DXF_小柱状图', {})
-    INTERVAL = int(_cfg.get('里程间隔', INTERVAL))
-    MAX_DEPTH = float(_cfg.get('最大深度', MAX_DEPTH))
-    COL_WIDTH = int(_cfg.get('柱宽', COL_WIDTH))
-    COL_HEIGHT = int(_cfg.get('柱高', COL_HEIGHT))
-    SPACING = int(_cfg.get('水平间距', SPACING))
-    MIN_THICKNESS = float(_cfg.get('最小厚度', MIN_THICKNESS))
-    MIN_SAMPLE_THICKNESS = float(_cfg.get('最小样本厚度', MIN_SAMPLE_THICKNESS))
+    def _cfg_int(key, default):
+        try:
+            return int(_cfg.get(key, default))
+        except (TypeError, ValueError, OverflowError):
+            return default
+
+    def _cfg_float(key, default):
+        try:
+            return float(_cfg.get(key, default))
+        except (TypeError, ValueError, OverflowError):
+            return default
+
+    INTERVAL = _cfg_int('里程间隔', INTERVAL)
+    MAX_DEPTH = _cfg_float('最大深度', MAX_DEPTH)
+    COL_WIDTH = _cfg_int('柱宽', COL_WIDTH)
+    COL_HEIGHT = _cfg_int('柱高', COL_HEIGHT)
+    SPACING = _cfg_int('水平间距', SPACING)
+    MIN_THICKNESS = _cfg_float('最小厚度', MIN_THICKNESS)
+    MIN_SAMPLE_THICKNESS = _cfg_float('最小样本厚度', MIN_SAMPLE_THICKNESS)
     STRATA_NAME_MAP = _cfg.get('岩土名称简化', STRATA_NAME_MAP)
     if col_height is not None:
         COL_HEIGHT = col_height
@@ -374,6 +390,12 @@ def generate_columns(da, output_path: str, interval: int = None,
         COL_WIDTH = col_width
     if interval is None:
         interval = INTERVAL
+    if isinstance(interval, bool) or not isinstance(interval, (int, float)) or interval < 100 or interval > 2000:
+        raise ValueError("里程间隔必须在 100 到 2000 之间")
+    if isinstance(COL_HEIGHT, bool) or not isinstance(COL_HEIGHT, (int, float)) or COL_HEIGHT < 5 or COL_HEIGHT > 50:
+        raise ValueError("柱高必须在 5 到 50 之间")
+    if isinstance(COL_WIDTH, bool) or not isinstance(COL_WIDTH, (int, float)) or COL_WIDTH < 3 or COL_WIDTH > 30:
+        raise ValueError("柱宽必须在 3 到 30 之间")
     DEPTH_SCALE = COL_HEIGHT / MAX_DEPTH
     try:
         bhs = _load_boreholes(da)

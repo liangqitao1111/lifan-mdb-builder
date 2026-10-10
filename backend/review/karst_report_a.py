@@ -91,7 +91,10 @@ def generate_karst_report_a(da, out_dir):
         for s in strata:
             name = s.get('tcymc', '')
             bottom = s.get('tccdsd', 0)
-            thick = s.get('tchd', 0) or (bottom - prev_depth)
+            thick_raw = s.get('tchd')
+            # P2-5（Codex 复核）：tchd 显式 0 = 零厚溶洞行 → 剔除（thick>0 过滤生效）；
+            # 仅当 tchd 缺失（None）时才回退 bottom-prev 厚度口径
+            thick = thick_raw if thick_raw is not None else (bottom - prev_depth)
 
             if name in SOLUBLE_ROCK_TYPES:
                 soluble_thick += thick

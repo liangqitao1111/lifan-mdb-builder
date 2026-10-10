@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>理反 Web · 数据工作台（视觉升级预览 · 静态稿）</title>
+<style>
+/* ========== 设计令牌：保持现有 CSS 变量体系，仅精修取值 ========== */
+:root {
+  --primary: #0071e3;
+  --primary-pressed: #0066cc;
+  --primary-soft: rgba(0,113,227,.08);
+  --canvas: #ffffff;
+  --surface: #f5f5f7;
+  --surface-soft: #fafafc;
+  --hairline: #e8e8ed;
+  --hairline-strong: #d1d1d6;
+  --ink: #1d1d1f;
+  --charcoal: #3a3a3c;
+  --slate: #6e6e73;
+  --steel: #8e8e93;
+  --muted: #aeaeb2;
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --error: #ff3b30;
+  --tint-mint: #e8f8ee;
+  --tint-yellow: #fff8e6;
+
+  --fs-xs: 11px; --fs-sm: 12px; --fs-base: 13px; --fs-md: 14px;
+  --radius-md: 10px; --radius-lg: 14px; --radius-xl: 18px; --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.03), 0 4px 14px rgba(0,0,0,.04);
+  --shadow-lift: 0 8px 28px rgba(0,0,0,.09), 0 2px 6px rgba(0,0,0,.05);
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --t-fast: .15s; --t-mid: .22s;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: var(--ink); background: var(--surface); -webkit-font-smoothing: antialiased;
+  display: flex; min-height: 100vh;
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input { font-family: inherit; }
+
+/* ========== 1. 侧边栏：加深为浅色磨砂 + 选中胶囊 ========== */
+.sidebar {
+  flex: 0 0 232px; background: rgba(250,250,252,.86); backdrop-filter: blur(14px);
+  border-right: 1px solid var(--hairline); padding: 20px 12px; display: flex; flex-direction: column; gap: 2px;
+}
+.sb-head { display: flex; align-items: center; gap: 10px; padding: 2px 12px 16px; }
+.sb-logo {
+  width: 30px; height: 30px; border-radius: 9px; color: #fff; font-weight: 800; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0a84ff, #0057c2); box-shadow: 0 4px 10px rgba(0,113,227,.3);
+}
+.sb-name { font-size: 15.5px; font-weight: 700; letter-spacing: -.2px; }
+.sb-ver { font-size: 10px; color: var(--muted); background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; padding: 1px 6px; margin-left: 2px; }
+.sb-section { padding: 16px 14px 6px; font-size: 10.5px; font-weight: 700; color: var(--muted); letter-spacing: 1.2px; }
+.nav-item {
+  display: flex; align-items: center; gap: 11px; height: 38px; padding: 0 12px; border-radius: 10px;
+  color: var(--slate); font-size: 13.5px; cursor: pointer; transition: all var(--t-fast) var(--ease); position: relative;
+}
+.nav-item:hover { background: rgba(0,0,0,.045); color: var(--ink); }
+.nav-item.active { background: #fff; color: var(--primary); font-weight: 600; box-shadow: var(--shadow-card); }
+.nav-item.active::before {
+  content: ""; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--primary);
+}
+.nav-item svg { flex: 0 0 20px; }
+.sb-foot { margin-top: auto; padding: 12px; }
+.sb-user { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--hairline); border-radius: 12px; padding: 9px 11px; box-shadow: var(--shadow-card); }
+.sb-user .av { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg,#5e5ce6,#0a84ff); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sb-user .nm { font-size: 13px; font-weight: 600; }
+.sb-user .rl { font-size: 11px; color: var(--muted); }
+
+/* ========== 2. 主区 & 顶栏 ========== */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  height: 58px; background: rgba(255,255,255,.82); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px; padding: 0 24px;
+  position: sticky; top: 0; z-index: 20;
+}
+.crumb { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.crumb .sep { color: var(--muted); font-weight: 400; }
+.crumb .dim { color: var(--steel); font-weight: 500; }
+.top-search {
+  margin-left: auto; display: flex; align-items: center; gap: 8px; height: 34px; width: 300px;
+  padding: 0 12px; background: var(--surface); border: 1px solid transparent; border-radius: 999px; transition: all var(--t-fast);
+}
+.top-search:focus-within { background: #fff; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,113,227,.14); }
+.top-search input { border: none; outline: none; background: transparent; flex: 1; font-size: 13px; color: var(--ink); }
+.top-search .kbd { font-size: 10.5px; color: var(--muted); border: 1px solid var(--hairline-strong); border-radius: 5px; padding: 0 5px; background: #fff; }
+.icon-btn { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--slate); transition: all var(--t-fast); }
+.icon-btn:hover { background: var(--surface); color: var(--ink); }
+.conn-pill { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 999px; background: var(--tint-mint); color: #1f9d4d; font-size: 12px; font-weight: 600; }
+.conn-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px rgba(52,199,89,.18); }
+
+.content { flex: 1; padding: 26px 28px 40px; overflow-y: auto; max-width: 1560px; margin: 0 auto; width: 100%; }
+
+/* ========== 3. 页头：更大留白 + 层级清晰的标题组 ========== */
+.ws-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
+.ws-eyebrow { font-size: 12px; font-weight: 700; color: var(--primary); letter-spacing: 1.6px; text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.ws-eyebrow::before { content: ""; width: 18px; height: 2px; border-radius: 1px; background: var(--primary); }
+.ws-title { font-size: 30px; font-weight: 800; letter-spacing: -.8px; line-height: 1.1; }
+.ws-sub { color: var(--slate); font-size: 13.5px; margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.db-chip { display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--hairline); border-radius: 8px; padding: 2px 9px; font-size: 12px; font-weight: 600; color: var(--charcoal); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.head-actions { display: flex; gap: 10px; }
+
+.btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 600; transition: all var(--t-fast) var(--ease); }
+.btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(0,113,227,.28); }
+.btn-primary:hover { background: var(--primary-pressed); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,113,227,.34); }
+.btn-secondary { background: #fff; color: var(--charcoal); border: 1px solid var(--hairline-strong); }
+.btn-secondary:hover { border-color: var(--muted); background: var(--surface-soft); transform: translateY(-1px); }
+
+/* ========== 4. KPI 统计卡：图标徽章 + 趋势副文案 ========== */
+.ws-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+.ws-stat {
+  background: #fff; border: 1px solid var(--hairline); border-radius: var(--radius-xl); padding: 18px 20px;
+  box-shadow: var(--shadow-card); cursor: pointer; position: relative; overflow: hidden;
+  transition: transform var(--t-mid) var(--ease), box-shadow var(--t-mid) var(--ease);
+}
+.ws-stat:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.ws-stat .top { display: flex; justify-content: space-between; align-items: center; }
+.ws-stat .lbl { font-size: 12.5px; color: var(--steel); font-weight: 600; letter-spacing: .3px; }
+.ws-stat .badge { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.ws-stat .num { font-size: 30px; font-weight: 800; margin-top: 10px; letter-spacing: -.8px; font-variant-numeric: tabular-nums; }
+.ws-stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+.ws-stat .arrow { position: absolute; right: 16px; bottom: 16px; color: var(--muted); opacity: 0; transform: translateX(-4px); transition: all var(--t-fast); }
+.ws-stat:hover .arrow { opacity: 1; transform: translateX(0); color: var(--primary); }
+.ws-stat[data-tone="warn"] { background: linear-gradient(135deg, #fff 55%, rgba(255,159,10,.07)); border-color: rgba(255,159,10,.35); }
+.ws-stat[data-tone="warn"] .num { color: #e08900; }
+.ws-stat .meter { height: 4px; border-radius: 2px; background: var(--surface); margin-top: 12px; overflow: hidden; }
+.ws-stat .meter i { display: block; height: 100%; border-radius: 2px; }
+
+/* ========== 5. 三栏工作区 ========== */
+.ws-grid { display: grid; grid-template-columns: 208px minmax(0,1fr) 268px; gap: 14px; align-items: stretch; }
+.ws-panel { background: #fff; border: 1px solid var(--hairline); border-radius: var(--radius-xl); box-shadow: var(--shadow-card); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow var(--t-mid) var(--ease); }
+.ws-panel:hover { box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+.ws-panel .p-head { padding: 13px 16px; border-bottom: 1px solid var(--hairline); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ws-panel .p-head .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--steel); background: var(--surface); border-radius: 999px; padding: 2px 9px; }
+
+/* 左栏：钻孔列表 */
+.chk { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--slate); font-weight: 500; cursor: pointer; }
+.ws-holes { padding: 6px; overflow-y: auto; }
+.ws-hole {
+  padding: 9px 11px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 6px;
+  font-size: 13px; border-radius: 10px; border-left: 3px solid transparent; margin-bottom: 2px;
+  transition: all var(--t-fast) var(--ease); font-variant-numeric: tabular-nums;
+}
+.ws-hole:hover { background: var(--surface-soft); }
+.ws-hole.active { background: var(--primary-soft); color: var(--primary); font-weight: 700; border-left-color: var(--primary); }
+.ws-hole.risk-h:not(.active) { border-left-color: rgba(255,59,48,.55); }
+.ws-hole.risk-m:not(.active) { border-left-color: rgba(255,159,10,.55); }
+.ws-hole > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #fff; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.14); }
+.ws-badge.h { background: var(--error); }
+.ws-badge.m { background: var(--warning); }
+.ws-ok-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); opacity: .75; flex: 0 0 7px; }
+
+/* 中栏：分段标签 + 表格 */
+.seg-tabs { display: inline-flex; background: var(--surface); border-radius: var(--radius-pill); padding: 3px; gap: 2px; }
+.seg-tabs .seg { padding: 5px 13px; font-size: 12.5px; font-weight: 500; color: var(--slate); border-radius: var(--radius-pill); cursor: pointer; transition: all var(--t-fast) var(--ease); white-space: nowrap; }
+.seg-tabs .seg:hover { color: var(--ink); }
+.seg-tabs .seg.on { background: #fff; color: var(--primary); font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.ws-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+.ws-toolbar .tinfo { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+.mini-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--charcoal); background: var(--surface); border: 1px solid var(--hairline); transition: all var(--t-fast); }
+.mini-btn:hover { background: #fff; border-color: var(--hairline-strong); }
+
+.grid-wrap { overflow: auto; }
+.t-head, .t-row { display: grid; grid-template-columns: 40px 56px 150px 90px 76px 76px 76px 90px 76px 1fr; align-items: center; min-width: 880px; }
+.t-head { background: var(--surface-soft); min-height: 40px; padding: 6px 16px; font-size: 11px; font-weight: 700; color: var(--steel); letter-spacing: .2px; position: sticky; top: 0; z-index: 2; }
+.t-row { padding: 0 16px; min-height: 44px; border-bottom: 1px solid #f2f2f5; font-size: 12.5px; transition: background .12s; }
+.t-row:hover { background: rgba(0,113,227,.045); }
+.t-row:last-child { border-bottom: none; }
+.t-row .num-cell { font-variant-numeric: tabular-nums; color: var(--charcoal); }
+.t-row .idx { color: var(--muted); font-size: 11px; }
+.t-row .rock { font-weight: 600; color: var(--ink); }
+.t-row .desc { color: var(--slate); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+.cell-flag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; }
+.cell-flag.warn { background: rgba(255,159,10,.13); color: #c47b00; }
+.pagination { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--hairline); background: var(--surface-soft); margin-top: auto; }
+.pagination .pg-info { color: var(--steel); font-size: 12px; margin-right: auto; }
+.pg-btn { height: 28px; padding: 0 11px; border-radius: 8px; background: #fff; border: 1px solid var(--hairline-strong); font-size: 12px; font-weight: 600; color: var(--charcoal); }
+.pg-size { height: 28px; border: 1px solid var(--hairline-strong); border-radius: 8px; font-size: 12px; padding: 0 6px; background: #fff; color: var(--charcoal); }
+
+/* 右栏：复核问题 */
+.issue-list { overflow-y: auto; }
+.ws-issue { padding: 11px 14px; border-bottom: 1px solid #f2f2f5; font-size: 12.5px; line-height: 1.5; cursor: pointer; transition: background var(--t-fast); position: relative; }
+.ws-issue:hover { background: var(--surface-soft); }
+.ws-issue::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; }
+.ws-issue.issue-h::before { background: var(--error); }
+.ws-issue.issue-m::before { background: var(--warning); }
+.ws-issue .rid { font-weight: 800; margin-right: 6px; padding: 1px 7px; border-radius: 6px; font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ws-issue.issue-h .rid { background: rgba(255,59,48,.12); color: var(--error); }
+.ws-issue.issue-m .rid { background: rgba(255,159,10,.14); color: #c47b00; }
+.ws-issue .msg { color: var(--charcoal); }
+.ws-issue .fld { color: var(--muted); font-size: 11px; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; display: flex; align-items: center; gap: 6px; }
+.ws-issue .jump { color: var(--primary); font-weight: 600; }
+.issue-foot { margin-top: auto; padding: 10px 14px; border-top: 1px solid var(--hairline); background: var(--surface-soft); display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--steel); }
+.legend { display: flex; gap: 10px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+
+@media (max-width: 1200px) { .ws-grid { grid-template-columns: 180px minmax(0,1fr); } .ws-grid .ws-panel:last-child { display: none; } }
+</style>
+</head>
+<body>
+
+<!-- ============ 侧边栏 ============ -->
+<aside class="sidebar">
+  <div class="sb-head">
+    <div class="sb-logo">理</div>
+    <div class="sb-name">理反 Web</div>
+    <span class="sb-ver">v45</span>
+  </div>
+  <div class="sb-section">工作台</div>
+  <div class="nav-item active">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.7"/><rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="1.7"/></svg>
+    数据工作台
+  </div>
+  <div class="nav-item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 12 4.5 7.8M12 12l7.5-4.2M12 12v8.5" stroke="currentColor" stroke-width="1.7"/></svg>
+    工具箱
+  </div>
+  <div class="nav-item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    成果生成
+  </div>
+  <div class="sb-section">系统</div>
+  <div class="nav-item">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    参数配置
+  </div>
+  <div class="sb-foot">
+    <div class="sb-user">
+      <div class="av">张</div>
+      <div><div class="nm">张工</div><div class="rl">管理员 · 在线</div></div>
+    </div>
+  </div>
+</aside>
+
+<!-- ============ 主区 ============ -->
+<div class="main">
+  <header class="topbar">
+    <div class="crumb"><span class="dim">工作台</span><span class="sep">/</span>数据工作台</div>
+    <div class="top-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="var(--steel)" stroke-width="1.8"/><path d="m20 20-3.5-3.5" stroke="var(--steel)" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input placeholder="搜索孔号 / 岩土名称…">
+      <span class="kbd">⌘K</span>
+    </div>
+    <span class="conn-pill"><span class="dot"></span>服务已连接</span>
+    <button class="icon-btn" title="通知">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6Zm4 9a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <main class="content">
+    <!-- 页头 -->
+    <div class="ws-head">
+      <div>
+        <div class="ws-eyebrow">Workspace</div>
+        <div class="ws-title">数据工作台</div>
+        <div class="ws-sub">
+          <span class="db-chip">⬢ db_id=GH2024-037</span>
+          钻孔数据 · 复核问题 · 在线编辑，一处完成
+        </div>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-secondary">⚙ 复核设置</button>
+        <button class="btn btn-secondary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          重新复核
+        </button>
+        <button class="btn btn-primary">切换库</button>
+      </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="ws-stats">
+      <div class="ws-stat">
+        <div class="top">
+          <span class="lbl">总孔数</span>
+          <span class="badge" style="background:rgba(0,113,227,.1);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M12 3l-4 4m4-4 4 4" stroke="var(--primary)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+        <div class="num">128</div>
+        <div class="sub">已全量复核 · 点击查看全部</div>
+        <div class="meter"><i style="width:100%;background:var(--primary);"></i></div>
+      </div>
+      <div class="ws-stat" data-tone="warn">
+        <div class="top">
+          <span class="lbl">风险钻孔</span>
+          <span class="badge" style="background:rgba(255,159,10,.14);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 4 2.5 20h19L12 4Z" stroke="#e08900" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4m0 3v.5" stroke="#e08900" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+        </div>
+        <div class="num">17</div>
+        <div class="sub">H 级孔 4 · M 级孔 13 · 点击跳转</div>
+        <div class="meter"><i style="width:13%;background:var(--warning);"></i></div>
+        <span class="arrow">→</span>
+      </div>
+      <div class="ws-stat">
+        <div class="top">
+          <span class="lbl">问题总数</span>
+          <span class="badge" style="background:rgba(255,59,48,.1);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="var(--error)" stroke-width="1.8"/><path d="M12 8v5m0 3v.5" stroke="var(--error)" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+        </div>
+        <div class="num" style="color:var(--error);">42</div>
+        <div class="sub">H 级 6 · M 级 36 · 点击跳转</div>
+        <div class="meter"><i style="width:33%;background:linear-gradient(90deg,var(--warning),var(--error));"></i></div>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+
+    <!-- 三栏工作区 -->
+    <div class="ws-grid">
+      <!-- 左：钻孔列表 -->
+      <section class="ws-panel">
+        <div class="p-head">钻孔列表
+          <label class="chk"><input type="checkbox" checked>仅问题孔</label>
+          <span class="cnt">17 孔</span>
+        </div>
+        <div class="ws-holes">
+          <div class="ws-hole active risk-h"><span>ZK-012</span><span><span class="ws-badge h">H·2</span><span class="ws-badge m">M·1</span></span></div>
+          <div class="ws-hole risk-h"><span>ZK-018</span><span><span class="ws-badge h">H·1</span><span class="ws-badge m">M·2</span></span></div>
+          <div class="ws-hole risk-h"><span>ZK-023</span><span><span class="ws-badge h">H·1</span></span></div>
+          <div class="ws-hole risk-m"><span>ZK-031</span><span><span class="ws-badge m">M·3</span></span></div>
+          <div class="ws-hole risk-m"><span>ZK-045</span><span><span class="ws-badge m">M·2</span></span></div>
+          <div class="ws-hole risk-m"><span>ZK-052</span><span><span class="ws-badge m">M·1</span></span></div>
+          <div class="ws-hole risk-h"><span>ZK-067</span><span><span class="ws-badge h">H·2</span><span class="ws-badge m">M·2</span></span></div>
+          <div class="ws-hole risk-m"><span>ZK-074</span><span><span class="ws-badge m">M·2</span></span></div>
+          <div class="ws-hole"><span>ZK-078</span><span class="ws-ok-dot"></span></div>
+          <div class="ws-hole"><span>ZK-081</span><span class="ws-ok-dot"></span></div>
+          <div class="ws-hole risk-m"><span>ZK-089</span><span><span class="ws-badge m">M·1</span></span></div>
+          <div class="ws-hole"><span>ZK-093</span><span class="ws-ok-dot"></span></div>
+          <div class="ws-hole risk-m"><span>ZK-101</span><span><span class="ws-badge m">M·2</span></span></div>
+          <div class="ws-hole"><span>ZK-107</span><span class="ws-ok-dot"></span></div>
+        </div>
+      </section>
+
+      <!-- 中：数据表格 -->
+      <section class="ws-panel">
+        <div style="display:flex;gap:4px;padding:10px 14px 0;">
+          <div class="seg-tabs">
+            <span class="seg on">地层</span><span class="seg">标贯</span><span class="seg">动探</span><span class="seg">水位</span><span class="seg">取样</span><span class="seg">颗分</span>
+          </div>
+        </div>
+        <div class="ws-toolbar">
+          <button class="mini-btn">⟳ 刷新</button>
+          <button class="mini-btn">☰ 列设置</button>
+          <span class="tinfo">z_g_TuCeng · ZK-012 · 共 9 层</span>
+        </div>
+        <div class="grid-wrap">
+          <div class="t-head">
+            <div>#</div><div>层号</div><div>岩土名称</div><div>层底深度(m)</div><div>层厚(m)</div><div>密实度</div><div>湿度</div><div>可塑性</div><div>风化程度</div><div>描述</div>
+          </div>
+          <div class="t-row"><div class="idx">1</div><div class="num-cell">①</div><div class="rock">杂填土</div><div class="num-cell">1.80</div><div class="num-cell">1.80</div><div>—</div><div>稍湿</div><div>—</div><div>—</div><div class="desc">杂色，松散，含建筑垃圾约15%</div></div>
+          <div class="t-row"><div class="idx">2</div><div class="num-cell">②</div><div class="rock">粉质黏土</div><div class="num-cell">4.60</div><div class="num-cell">2.80</div><div>—</div><div>湿</div><div><span class="cell-flag warn">软塑 ⚠</span></div><div>—</div><div class="desc">黄褐色，含少量铁锰质结核</div></div>
+          <div class="t-row"><div class="idx">3</div><div class="num-cell">③</div><div class="rock">粉土</div><div class="num-cell">7.90</div><div class="num-cell">3.30</div><div>稍密</div><div>很湿</div><div>—</div><div>—</div><div class="desc">摇振反应中等，无光泽反应</div></div>
+          <div class="t-row"><div class="idx">4</div><div class="num-cell">④</div><div class="rock">粉细砂</div><div class="num-cell">12.40</div><div class="num-cell">4.50</div><div>中密</div><div>饱和</div><div>—</div><div>—</div><div class="desc">矿物成分以石英、长石为主</div></div>
+          <div class="t-row"><div class="idx">5</div><div class="num-cell">⑤</div><div class="rock">粉质黏土</div><div class="num-cell">16.20</div><div class="num-cell">3.80</div><div>—</div><div>湿</div><div>硬塑</div><div>—</div><div class="desc">切面稍光滑，干强度中等</div></div>
+          <div class="t-row"><div class="idx">6</div><div class="num-cell">⑥</div><div class="rock">强风化泥岩</div><div class="num-cell">19.50</div><div class="num-cell">3.30</div><div>—</div><div>—</div><div>—</div><div>强风化</div><div class="desc">岩芯破碎，呈碎块状</div></div>
+          <div class="t-row"><div class="idx">7</div><div class="num-cell">⑦</div><div class="rock">中风化泥岩</div><div class="num-cell">25.00</div><div class="num-cell">5.50</div><div>—</div><div>—</div><div>—</div><div>中风化</div><div class="desc">岩芯呈短柱状，RQD≈62%</div></div>
+        </div>
+        <div class="pagination">
+          <span class="pg-info">第 1–9 条 · 共 9 条</span>
+          <select class="pg-size"><option>50 条/页</option></select>
+          <button class="pg-btn">上一页</button><button class="pg-btn">下一页</button>
+        </div>
+      </section>
+
+      <!-- 右：复核问题 -->
+      <section class="ws-panel">
+        <div class="p-head">复核问题 <span class="cnt">3 项</span></div>
+        <div class="issue-list">
+          <div class="ws-issue issue-h">
+            <div><span class="rid">R-CRS-001</span><span class="msg">可塑状态「软塑」超过工程限制（硬塑）</span></div>
+            <div class="fld">层 ② · TCKSX = 软塑 <span class="jump">定位 →</span></div>
+          </div>
+          <div class="ws-issue issue-h">
+            <div><span class="rid">R-CRS-004</span><span class="msg">岩土定名与标准地层表不一致</span></div>
+            <div class="fld">层 ⑤ · TCYMC = 粉质黏土 <span class="jump">定位 →</span></div>
+          </div>
+          <div class="ws-issue issue-m">
+            <div><span class="rid">R-THK-002</span><span class="msg">层厚与层底深度推算值偏差 0.05m</span></div>
+            <div class="fld">层 ③ · TCHD = 3.30 <span class="jump">定位 →</span></div>
+          </div>
+        </div>
+        <div class="issue-foot">
+          <div class="legend"><span><i style="background:var(--error);"></i>H 高风险</span><span><i style="background:var(--warning);"></i>M 中风险</span></div>
+          <span>复核于 14:32</span>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

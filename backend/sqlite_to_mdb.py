@@ -139,10 +139,13 @@ def prep_value(v):
     return v
 
 
-def table_columns(schema_tables, table_name, rows):
+def table_columns(schema_tables, table_name, rows, sqlite_conn=None):
     """
     决定建表列：以 schema 为准（跳过 injected_id 列），
     数据中多余列（schema 未声明）追加在末尾，类型兜底推断。
+    sqlite_conn: SQLite 连接（可选）——schema 声明为空且表 0 行时，从 PRAGMA
+    table_info 兜底推断列（修复：demo 库 sidecar columns=[] + 0 行表此前整表
+    被跳过建表，verify_mdb 报"缺表"使构建 fail-closed 失败）。
     返回 (col_infos, col_names) —— col_infos: [{"name","mdb_type","primary_key"}]
     """
     table_schema = (schema_tables or {}).get(table_name, {})
@@ -185,17 +188,33 @@ def table_columns(schema_tables, table_name, rows):
                     "primary_key": False,
                 })
                 seen.add(name)
+    # 兜底：schema 声明为空且 0 行（无样例值可推断）→ 从 SQLite PRAGMA 推断列
+    if not infos and sqlite_conn is not None:
+        try:
+            for c in sqlite_conn.execute(f'PRAGMA table_info("{table_name}")').fetchall():
+                name, stype = c[1], c[2]
+                if name in seen or (str(name).lower() == "id" and c[5]):
+                    # injected 自增主键按契约跳过（schema 无声明时也保持一致）
+                    continue
+                infos.append({
+                    "name": name,
+                    "mdb_type": infer_mdb_type(stype, None),
+                    "primary_key": bool(c[5]),
+                })
+                seen.add(name)
+        except Exception:
+            pass
     return infos
 
 
-def build_schema(mdb_path, tables, schema):
+def build_schema(mdb_path, tables, schema, sqlite_conn=None):
     """按 schema.json v2 建表（表名/字段名含中文 → 一律加 [ ]；主键声明 PRIMARY KEY）"""
     conn = connect_mdb(mdb_path)
     cur = conn.cursor()
     schema_tables = (schema or {}).get("tables", {})
     created = 0
     for table_name, rows in tables.items():
-        infos = table_columns(schema_tables, table_name, rows)
+        infos = table_columns(schema_tables, table_name, rows, sqlite_conn=sqlite_conn)
         if not infos:
             print(f"  ⚠ 表 [{table_name}] 无有效列（可能全部为 injected_id），跳过")
             continue
@@ -219,7 +238,7 @@ def build_schema(mdb_path, tables, schema):
     return created
 
 
-def fill_data(mdb_path, tables, schema):
+def fill_data(mdb_path, tables, schema, sqlite_conn=None):
     """按行写入数据（参数化 SQL，中文值安全；跳过 injected_id 列）"""
     conn = connect_mdb(mdb_path)
     cur = conn.cursor()
@@ -228,7 +247,7 @@ def fill_data(mdb_path, tables, schema):
     for table_name, rows in tables.items():
         if not rows:
             continue
-        infos = table_columns(schema_tables, table_name, rows)
+        infos = table_columns(schema_tables, table_name, rows, sqlite_conn=sqlite_conn)
         if not infos:
             continue
         col_names = [c["name"] for c in infos]
@@ -296,7 +315,6 @@ def main():
     for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
         rows = [dict(r) for r in conn.execute(f'SELECT * FROM "{name}"')]
         tables[name] = rows
-    conn.close()
 
     # 2. 读 schema 定义（v2 权威）
     with open(args.schema, "r", encoding="utf-8") as f:
@@ -319,14 +337,15 @@ def main():
         print(f"[1/4] 创建空 .mdb（ADOX.Catalog）…")
         create_database(mdb_path)
         print(f"[2/4] 按 schema v2 建表（跳过 injected_id，主键 PRIMARY KEY）…")
-        n_tables = build_schema(mdb_path, tables, schema)
+        n_tables = build_schema(mdb_path, tables, schema, sqlite_conn=conn)
         print(f"      {n_tables} 张表已创建")
         print(f"[3/4] 写入数据 …")
-        n = fill_data(mdb_path, tables, schema)
+        n = fill_data(mdb_path, tables, schema, sqlite_conn=conn)
         print(f"      {n} 行已写入")
         print(f"[4/4] 打包 .lz: {args.out}")
         pack_lz(project, ts, mdb_path, args.out)
     finally:
+        conn.close()
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
 

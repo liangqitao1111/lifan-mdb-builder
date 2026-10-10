@@ -353,3 +353,12 @@ cd C:\Users\神舟\WorkBuddy\2026-08-12-01-18-03\lifan_web
 - Web `main` → GitHub lifan-mdb-builder：`2eeeb45`
 - 备注：桌面 work/ 由 .git/info/exclude 忽略（含本复核产物，本地留存备查）。
 
+
+
+---
+
+## 附：与勘察报告生成器的 DSH 集成（2026-08-20）
+
+- 理反工作库（`work/dbs/{id}.db`）已支持被报告生成器 importer 直读（`C:\Users\神舟\Documents\Codex\kancha-report\dsh-plugin\README.md`）。
+- DSH 插件 `lifan-report` 提供 Agent 流水线：上传→复核→修正→出报告→校验。
+- 规划：DSH 侧边栏嵌入理反 Web :8766 与报告工作台 :8765（P3，见 kancha-report/dsh-plugin/README.md）。

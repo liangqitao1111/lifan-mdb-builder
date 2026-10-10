@@ -279,8 +279,18 @@ def main():
             # 全量多集比对（排除 injected_id；无排序假设——Access 返回顺序不受控，
             # SQLite/ACE 中文排序规则不同，任何 ORDER BY 对齐都可能错位误报）
             exclude = meta.get(t, {}).get("exclude", set())
+            mdb_types_t = meta.get(t, {}).get("mdb_types", {})
             cols = [r[1] for r in conn.execute(f'PRAGMA table_info("{t}")')]
             cmp_cols = [c for c in cols if c not in exclude]
+            # P3（本地通道）：schema 未声明 injected_id（demo 老库）时，比对列须与
+            # MDB 实际列取交集——重建按"schema ∪ 数据样例列"建表，0 行表无法从
+            # 样例补列，注入 id 不会出现在 MDB；SELECT 不存在的列报 ODBC 07002。
+            try:
+                ace_cols = {r.column_name for r in mconn.cursor().columns(table=t)}
+                if ace_cols:
+                    cmp_cols = [c for c in cmp_cols if c in ace_cols]
+            except Exception:
+                pass  # columns() 不可用时保持原列表（报错信息仍可定位）
             if not cmp_cols:
                 continue
             srows = fetch_rows_sqlite(conn, t, cmp_cols)
